@@ -1,0 +1,1465 @@
+/* ==========================================================================
+   ШИФРОПАНК — стиль «старый BIOS / ретро-киберпанк»
+   ========================================================================== */
+:root {
+  --bg: #050807;
+  --panel: #0a120e;
+  --line: #1d3a2a;
+  --green: #00ff9c;
+  --green-dim: #0a6b46;
+  --amber: #ffd740;
+  --red: #ff2244;
+  --blue: #29b6f6;
+  --cyan: #00e5ff; /* циановый акцент: окно сканера, зона МАТРИЦЫ, выбранные слоты */
+  --text: #b8ffd9;
+  --font: "Courier New", "Lucida Console", monospace;
+}
+/* Цветовые темы интерфейса (переключаются в шапке или на экране входа) */
+body.theme-amber {
+  --bg: #060300;
+  --panel: #0e0700;
+  --line: #5a3a08;
+  --green: #ffb000;
+  --green-dim: #8a5c10;
+  --amber: #ffe9a0;
+  --text: #ffcf7a;
+  --red: #ff5544;
+  --blue: #35c4ff;
+}
+body.theme-ice {
+  --bg: #020608;
+  --panel: #051019;
+  --line: #0f3a4a;
+  --green: #00e5ff;
+  --green-dim: #0a5a66;
+  --text: #b8f4ff;
+  --amber: #ffd740;
+  --red: #ff5566;
+  --blue: #8ab4ff;
+}
+html body.eye-calm { /* html-префикс: вес выше любой темы — затемнение работает всегда */
+  --green: #7fbf9f;
+  --text: #9db8a8;
+  --amber: #b8a86a;
+  --red: #a66;
+  --blue: #7a96b8;
+  --cyan: #6aa8a8;
+  --bg: #0a0d0b;
+  --panel: #101511;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  --sidebar-w: 250px; /* ширина сайдбара в бою — нужна для центровки веера карт */
+  --map-w: 72%; /* ШИРИНА ОКНА КАРТЫ В БОЮ — доля игровой области (крути здесь) */
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+/* Запрет «потяни-чтобы-обновить» на телефоне: свайп вниз (например, в змейке)
+   перезагружал страницу и кидал игроков из матча. */
+html, body { overscroll-behavior-y: none; }
+
+/* CRT-эффект: сканлайны + лёгкое свечение */
+#crt {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9000;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+body.eye-calm #crt { opacity: .35; }
+
+/* Трещины экрана при уроне */
+#crack-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 8999;
+  opacity: 0; transition: opacity .4s;
+  background-image:
+    linear-gradient(35deg, transparent 49.6%, rgba(200,255,230,.5) 49.8%, transparent 50.2%),
+    linear-gradient(120deg, transparent 49.7%, rgba(200,255,230,.4) 49.9%, transparent 50.3%),
+    linear-gradient(75deg, transparent 49.7%, rgba(200,255,230,.35) 49.9%, transparent 50.2%),
+    linear-gradient(160deg, transparent 49.8%, rgba(200,255,230,.3) 50%, transparent 50.4%);
+  background-size: 60vmax 60vmax, 45vmax 45vmax, 30vmax 30vmax, 22vmax 22vmax;
+  background-position: 10% 20%, 70% 60%, 40% 80%, 85% 15%;
+  background-repeat: no-repeat;
+}
+#crack-overlay.show { opacity: 1; }
+#crack-overlay.perma { opacity: .55; }
+
+/* ---------- Низкое ХП: интерфейс «умирает» ---------- */
+/* Постоянное лёгкое мерцание трещин + красная виньетка по краям */
+body.low-hp #crack-overlay.perma { animation: crackflick 2.4s steps(3, jump-none) infinite; }
+@keyframes crackflick {
+  0%, 100% { opacity: .55; }
+  30% { opacity: .75; }
+  55% { opacity: .4; }
+  80% { opacity: .65; }
+}
+body.low-hp::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 8998;
+  box-shadow: inset 0 0 120px rgba(255,34,68,.28);
+  animation: lowhp-pulse 1.8s ease-in-out infinite;
+}
+@keyframes lowhp-pulse {
+  0%, 100% { box-shadow: inset 0 0 120px rgba(255,34,68,.22); }
+  50% { box-shadow: inset 0 0 160px rgba(255,34,68,.38); }
+}
+/* Короткий «лаг» интерфейса: весь UI дёргается и мылится на ~0.3с */
+body.ui-lag #screen-game { animation: uilag .32s steps(3, jump-none); }
+@keyframes uilag {
+  0%   { transform: translate(0,0); filter: none; }
+  30%  { transform: translate(-4px,1px); filter: blur(1px) saturate(1.8); }
+  60%  { transform: translate(3px,-2px); filter: blur(.5px) hue-rotate(50deg); }
+  100% { transform: translate(0,0); filter: none; }
+}
+/* Заметное «залипание» курсора-подсказок не нужно — только визуальные помехи */
+
+#fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9500; overflow: hidden; }
+
+/* ---------- Полноэкранный глитч (урон, критические сбои) ---------- */
+body.dmg-glitch { animation: bodyshear .12s steps(2, jump-none) infinite; }
+@keyframes bodyshear {
+  0%   { transform: translate(0,0) skewX(0); filter: none; }
+  25%  { transform: translate(-6px,2px) skewX(-1.2deg); filter: hue-rotate(40deg) saturate(1.6); }
+  50%  { transform: translate(5px,-3px) skewX(.8deg); filter: invert(.08) contrast(1.5); }
+  75%  { transform: translate(-3px,1px); filter: hue-rotate(-70deg); }
+  100% { transform: translate(0,0); filter: none; }
+}
+.glitch-slice {
+  position: absolute; left: -3%; width: 106%;
+  mix-blend-mode: screen; opacity: .8;
+  animation-name: slicemove; animation-timing-function: steps(2, jump-none);
+  animation-iteration-count: infinite;
+}
+@keyframes slicemove {
+  0%   { transform: translateX(0); }
+  33%  { transform: translateX(-42px); }
+  66%  { transform: translateX(28px); }
+  100% { transform: translateX(-12px); }
+}
+.glitch-glyph {
+  position: absolute; text-shadow: 0 0 8px currentColor;
+  animation: glyphjit .2s steps(2, jump-none) infinite;
+}
+.err-window.virus .err-title { animation: wallflick .3s steps(2, jump-none) infinite; }
+
+/* Всплывающие окна ошибок при краже мощности */
+.err-window {
+  position: absolute; min-width: 180px;
+  background: #0d0d0d; border: 2px solid var(--red);
+  box-shadow: 0 0 18px rgba(255,34,68,.6);
+  font-size: 11px; color: #ffb3c0;
+  animation: errpop 2.4s forwards;
+}
+.err-window .err-title {
+  background: var(--red); color: #000; padding: 1px 6px; font-weight: bold;
+  display: flex; justify-content: space-between;
+}
+.err-window .err-body { padding: 6px; }
+
+/* Окно сканера сети: живёт долго и НЕ гаснет само (в отличие от errpop).
+   Циановая тема, таймер обратного отсчёта в заголовке, тающая полоса снизу,
+   рабочий крестик. pointer-events: auto — ОБЯЗАТЕЛЕН: родитель #fx-layer
+   перехватывает НИЧЕО (pointer-events: none), без auto клики по кнопке
+   ПЕРЕХВАТ и крестику проваливаются сквозь окно на карту под ним. */
+.err-window.scan-window {
+  pointer-events: auto;
+  animation: errpop-in .25s ease-out;
+  border-color: var(--cyan); color: #b8ecff;
+  box-shadow: 0 0 18px rgba(0,229,255,.45);
+  min-width: 260px;
+}
+@keyframes errpop-in {
+  0% { transform: translateX(-50%) scale(.4); opacity: 0; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+.err-window.scan-window .err-title { background: var(--cyan); }
+.scan-timer { margin-left: auto; padding: 0 6px; opacity: .8; }
+.scan-close { cursor: pointer; padding: 0 2px; }
+.scan-close:hover { text-shadow: 0 0 6px #000; }
+.scan-life { height: 3px; background: rgba(0,229,255,.15); }
+.scan-life i {
+  display: block; height: 100%; width: 100%;
+  background: var(--cyan); box-shadow: 0 0 8px rgba(0,229,255,.8);
+}
+@keyframes errpop {
+  0% { transform: scale(.4); opacity: 0; }
+  10% { transform: scale(1.05); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: scale(.9); opacity: 0; }
+}
+
+/* ---------- Экраны ---------- */
+.screen { display: none; height: 100vh; }
+/* zoom масштабирует и vh-контейнеры: при крупном интерфейсе 100vh уезжает на
+   14% за низ экрана (рука в потоке обрезалась), при компактном — пустота.
+   Компенсируем высоту экранов обратным коэффициентом. */
+body.ui-large .screen { height: calc(100vh / 1.14); }
+body.ui-compact .screen { height: calc(100vh / 0.88); }
+.screen.active { display: block; }
+.hidden { display: none !important; }
+.dim { color: var(--green-dim); font-size: 12px; }
+body.eye-calm .dim { color: #5a7a68; }
+
+.btn {
+  font-family: var(--font); cursor: pointer;
+  background: transparent; color: var(--green);
+  border: 1px solid var(--green); padding: 8px 18px;
+  text-transform: uppercase; letter-spacing: 1px; font-size: 13px;
+  transition: all .15s;
+}
+.btn:hover { background: var(--green); color: #000; box-shadow: 0 0 14px var(--green); }
+.btn.small { padding: 3px 10px; font-size: 12px; }
+.btn.tiny { padding: 1px 6px; font-size: 10px; letter-spacing: 0; }
+.btn.danger { color: var(--red); border-color: var(--red); }
+.btn.danger:hover { background: var(--red); color: #000; box-shadow: 0 0 14px var(--red); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+
+input, select {
+  font-family: var(--font); background: #000; color: var(--green);
+  border: 1px solid var(--line); padding: 5px 8px; font-size: 13px;
+}
+input:focus, select:focus { outline: 1px solid var(--green); }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: inset 0 0 30px rgba(0,255,156,.04);
+}
+.panel h2 { color: var(--green); font-size: 14px; letter-spacing: 2px; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.panel h2.acc-amber { color: var(--amber); border-bottom-color: rgba(255,215,64,.35); }
+.panel h2.acc-blue { color: var(--blue); border-bottom-color: rgba(41,182,246,.35); }
+.panel h2.acc-red { color: var(--red); border-bottom-color: rgba(255,34,68,.35); }
+.panel h3 { color: var(--amber); font-size: 12px; letter-spacing: 1px; }
+.panel.grow { flex: 1; min-height: 0; overflow: auto; }
+
+/* ---------- Вход ---------- */
+#screen-join { display: none; position: relative; }
+#screen-join.active { display: flex; align-items: center; justify-content: center; }
+.join-box { text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.ascii-logo { color: var(--green); font-size: 9px; line-height: 1.15; text-shadow: 0 0 8px var(--green); }
+.tagline { color: var(--amber); font-size: 12px; }
+#join-name { width: 280px; text-align: center; font-size: 16px; padding: 10px; }
+
+/* ---------- Лобби ---------- */
+.lobby-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+  padding: 20px; height: 100vh;
+}
+.player-list { list-style: none; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+.player-list li {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border: 1px solid var(--line); background: rgba(0,255,156,.03);
+}
+.player-list li.current-turn { border-color: var(--amber); box-shadow: 0 0 10px rgba(255,215,64,.35); }
+.player-list li.dead { opacity: .35; text-decoration: line-through; }
+.p-color { width: 12px; height: 12px; flex: none; border: 1px solid #000; }
+.p-hp { color: var(--red); font-size: 12px; }
+.p-pow { color: var(--blue); font-size: 12px; }
+.p-tag { font-size: 10px; color: var(--amber); }
+.p-ready { color: var(--green); font-size: 11px; }
+.p-iface {
+  font-size: 10px; color: var(--blue); border: 1px solid var(--line);
+  padding: 0 4px; letter-spacing: 1px; flex: none;
+}
+/* Длинные ники режутся многоточием и ничего не выталкивают */
+.player-list .p-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Значок команды (командный режим): цвет задаётся инлайн из TEAM_COLORS */
+.p-team {
+  flex: none; font-size: 10px; font-weight: bold; letter-spacing: 1px;
+  border: 1px solid; padding: 0 4px; border-radius: 2px;
+}
+/* Селектор своей команды в лобби */
+.team-select { flex: none; width: 46px; padding: 1px 2px; font-size: 11px; }
+.team-select:disabled { opacity: .55; }
+/* Очки захвата в списке сети */
+.p-cap { color: #00e5ff; font-size: 12px; text-shadow: 0 0 6px rgba(0,229,255,.6); }
+/* Список сети: ТРИ строки — (1) №, цвет, ник, значок команды, интерфейс;
+   (2) ХП/мощность/очки/теги ПОД ником (длинный ник их не выталкивает);
+   (3) слоты текущего игрока */
+#game-players li { flex-direction: column; align-items: stretch; gap: 3px; }
+#game-players .p-line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#game-players .p-line1 .p-name { flex: 1; }
+#game-players .p-line2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-left: 18px; }
+#game-players .p-line3 { padding-left: 18px; }
+/* Слоты текущего игрока в списке сети. Мелкие, чтобы при базовой мощности 12
+   все биты помещались в ОДНУ строку панели игроков (12×12 + зазоры ≈ 166px). */
+.p-slots { display: inline-flex; gap: 2px; flex-wrap: wrap; }
+.p-slots .bit {
+  font-style: normal; font-size: 9px; width: 12px; height: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--green); color: var(--green);
+}
+/* биты 0 и 1 в очереди тоже одинаковые */
+.p-slots .bit.bclosed { color: var(--red); border-color: var(--red); }
+
+/* Панель отладки */
+#debug-panel { border-color: var(--red); box-shadow: inset 0 0 30px rgba(255,34,68,.08); }
+.dbg-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.dbg-row b { min-width: 26px; text-align: center; color: var(--amber); }
+
+.settings-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.settings-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+
+.chat-panel { min-height: 0; }
+.chat-log {
+  flex: 1; min-height: 120px; overflow-y: auto; background: #000;
+  border: 1px solid var(--line); padding: 6px; font-size: 12px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.chat-log .msg { word-break: break-word; }
+.chat-log .msg .from { font-weight: bold; }
+.chat-input { display: flex; gap: 6px; }
+.chat-input input { flex: 1; }
+
+/* ---------- Подготовка (пошаговый мастер) ---------- */
+.setup-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 12px; padding: 12px; height: 100vh; }
+.setup-left, .setup-right { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+
+.setup-step { position: relative; }
+.step-nav { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+
+/* Шаг 1: крупные карточки интерфейсов */
+#interface-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.iface-card { border: 1px solid var(--line); border-left-width: 4px; padding: 14px 12px; cursor: pointer; transition: all .15s; }
+.iface-card:hover { border-color: var(--green); box-shadow: 0 0 12px rgba(0,255,156,.15); }
+.iface-card.selected { border-color: var(--amber); background: rgba(255,215,64,.07); box-shadow: 0 0 14px rgba(255,215,64,.25); }
+.iface-card b { color: var(--green); font-size: 14px; letter-spacing: 1px; }
+.iface-card p { font-size: 11px; color: var(--text); opacity: .75; margin-top: 6px; line-height: 1.4; }
+.color-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+/* Секретная кнопка отладки: невидимая, в правом нижнем углу экрана входа */
+#debug-btn {
+  position: absolute; right: 2px; bottom: 2px; width: 34px; height: 34px;
+  opacity: 0; border: none; background: transparent; cursor: default; padding: 0;
+}
+
+/* Шаг ожидания: анимация загрузки */
+.loading-box { display: flex; flex-direction: column; gap: 12px; padding: 24px 10px; }
+.load-bar { height: 18px; border: 1px solid var(--green); background: #000; padding: 2px; }
+#load-fill {
+  height: 100%; width: 5%;
+  background: repeating-linear-gradient(90deg, var(--green) 0 8px, transparent 8px 12px);
+  box-shadow: 0 0 12px var(--green);
+  transition: width .4s steps(6);
+}
+.load-log { font-size: 12px; color: var(--green-dim); min-height: 130px; white-space: pre-wrap; }
+
+/* Панель конфигурации объектов карты */
+.obj-config { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.obj-config input[type="text"], .obj-config input:not([type]) { width: 130px; }
+.obj-config input[type="number"] { width: 56px; }
+.obj-config label { display: flex; align-items: center; gap: 4px; }
+#obj-zone-fields, #obj-mine-fields { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#obj-zone-fields.hidden, #obj-mine-fields.hidden { display: none; }
+
+.program-pool {
+  display: flex; flex-wrap: wrap; gap: 5px; overflow-y: auto;
+  max-height: 168px; border: 1px dashed var(--line); padding: 5px;
+}
+.prog-card {
+  border: 1px solid var(--line); border-left-width: 4px; background: #060b08; padding: 4px 6px;
+  width: 148px; cursor: pointer; user-select: none; position: relative;
+}
+.prog-card:hover { border-color: var(--green); }
+.prog-card.in-hand { background: rgba(0,255,156,.08); }
+/* Уже взятая программа (дубликаты запрещены) */
+.prog-card.taken { opacity: .45; cursor: not-allowed; background: rgba(0,255,156,.05); }
+.prog-card.taken:hover { border-color: var(--line); }
+.prog-card.broken { border-color: var(--red); }
+.prog-card .p-name { color: var(--green); font-size: 11px; font-weight: bold; }
+.prog-card .p-cons { color: var(--amber); font-size: 12px; letter-spacing: 2px; margin: 1px 0; }
+.prog-card .p-desc {
+  font-size: 9px; opacity: .7; line-height: 1.25; overflow: hidden;
+  /* длинные описания обрезаются многоточием после 3 строк —
+     полный текст виден во всплывающей подсказке (title) */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.prog-card .p-burn { color: var(--red); font-size: 9px; }
+
+/* Рука на экране подготовки: много программ — прокрутка внутри блока,
+   панель не разъезжается, кнопки навигации остаются внизу */
+.setup-hand {
+  display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; max-height: 240px;
+  overflow-y: auto; border: 1px dashed var(--line); padding: 6px;
+}
+#step-hand .step-nav { margin-top: auto; }
+/* Пул программ: повыше, чтобы было видно минимум два ряда карточек */
+#step-hand #program-pool { max-height: 340px; flex: none; }
+
+.map-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+#zone-config { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#zone-config input[type="number"] { width: 60px; }
+
+/* ---------- Карта ---------- */
+.map-grid {
+  display: grid; gap: 1px; background: #031008;
+  border: 1px solid var(--line); padding: 4px; overflow: auto;
+  flex: 1; min-height: 0; place-content: center;
+}
+.cell {
+  width: var(--cell, 18px); height: var(--cell, 18px); background: #07130c;
+  border: 1px solid rgba(29,58,42,.5); cursor: pointer; position: relative;
+}
+.cell:hover { outline: 1px solid var(--green); z-index: 2; }
+
+/* Битый пиксель: «сгоревшая» клетка с мерцающим глитч-символом */
+.cell.wall {
+  background: #14040a;
+  border-color: rgba(255,34,68,.45);
+  box-shadow: inset 0 0 6px rgba(255,34,68,.5);
+  animation: wallflick .8s steps(2, jump-none) infinite;
+}
+.cell.wall::after {
+  content: attr(data-glyph);
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .62);
+  color: var(--red); text-shadow: 0 0 6px var(--red);
+  animation: glyphjit .35s steps(2, jump-none) infinite;
+}
+@keyframes wallflick {
+  0%   { background: #14040a; box-shadow: inset 0 0 6px rgba(255,34,68,.5); }
+  50%  { background: #22060e; box-shadow: inset 0 0 10px rgba(255,34,68,.75); }
+}
+@keyframes glyphjit {
+  0%   { opacity: .95; transform: translate(0, 0); }
+  50%  { opacity: .35; transform: translate(1px, -1px); }
+}
+
+/* Мина и телепорт — ходимые объекты с иконкой */
+.cell.obj-mine { background: rgba(255,136,0,.08); }
+.cell.obj-mine::after {
+  content: "✳"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .6);
+  color: var(--obj-color, #ff8800); text-shadow: 0 0 6px var(--obj-color, #ff8800);
+}
+.cell.obj-portal { background: rgba(179,136,255,.08); }
+.cell.obj-portal::after {
+  content: "◎"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .66);
+  color: var(--obj-color, #b388ff); text-shadow: 0 0 8px var(--obj-color, #b388ff);
+  animation: portalspin 3s linear infinite;
+}
+@keyframes portalspin { to { transform: rotate(360deg); } }
+
+.cell.zone { border-color: rgba(255,255,255,.25); }
+.cell.zone-solid { border-style: dashed; }
+.cell.rect-anchor { outline: 2px solid var(--amber); z-index: 2; }
+.cell.spawn-ok { background: rgba(0,255,156,.18); }
+.cell.reach { background: rgba(0,255,156,.25); box-shadow: inset 0 0 6px var(--green); }
+.cell.attack-range { box-shadow: inset 0 0 0 1px rgba(255,34,68,.55); }
+.cell.targetable { background: rgba(255,34,68,.3); box-shadow: inset 0 0 8px var(--red); }
+.cell.pattern-preview { background: rgba(255,34,68,.55); box-shadow: inset 0 0 8px var(--red); }
+/* Выбор узора «Сломанной системы» */
+#pattern-picker { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+#pattern-picker.hidden { display: none; }
+#pattern-picker .pattern-btn.active { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 8px rgba(255,215,64,.4); }
+.cell .pawn { position: absolute; inset: 2px; box-shadow: 0 0 8px currentColor; }
+
+/* ---------- Игра ---------- */
+#screen-game.active { display: flex; flex-direction: column; }
+#game-topbar {
+  display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+#turn-banner { color: var(--amber); font-size: 16px; letter-spacing: 2px; flex: 1; text-shadow: 0 0 10px rgba(255,215,64,.5); }
+#timer-box { color: var(--green); font-size: 18px; }
+#timer-box.low { color: var(--red); animation: blink 1s infinite; }
+#my-stats { font-size: 13px; color: var(--text); }
+#my-stats b { color: var(--red); }
+#my-stats i { color: var(--blue); font-style: normal; }
+
+.game-layout {
+  flex: 1; display: grid; min-height: 0; gap: 10px; padding: 10px 10px 150px; /* запас снизу под веер карт */
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "sidebar map"
+    "sidebar slots";
+}
+#game-sidebar { grid-area: sidebar; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+/* Чат занимает остаток высоты сайдбара и скроллится САМ — длинная переписка
+   и боевой лог больше не выталкивают нижние панели за экран. */
+#game-sidebar .chat-panel {
+  flex: 1 1 0; min-height: 390px; display: flex; flex-direction: column; /* окно канала — примерно в 3 раза выше */
+}
+#game-sidebar .chat-panel .chat-log { flex: 1 1 0; min-height: 0; }
+#game-main { display: contents; } /* слоты — прямая ячейка сетки */
+/* ══ РАЗМЕР ОКНА КАРТЫ В БОЮ ═══════════════════════════════════════════
+   Окно карты ФИКСИРОВАННОЕ: вся высота между верхней панелью и слотами,
+   ширина --map-w от игровой области (задаётся в body выше), по центру.
+   От количества клеток размер окна НЕ зависит — клетки сами сжимаются
+   (см. fitCells в public/js/game.js), карта никогда не выходит за рамку. */
+#game-map-panel { grid-area: map; display: flex; min-height: 0; min-width: 0; width: var(--map-w, 72%); max-width: none; justify-self: center; align-self: stretch; }
+#game-map-panel .panel { width: 100%; height: 100%; }
+/* 100% масштаба — карта влезает целиком; больше — скролл внутри окна (🎨 ВИД) */
+#game-map { overflow: auto; max-height: 100%; }
+
+#slots-bar {
+  grid-area: slots; border: 1px solid var(--line); background: var(--panel);
+  display: flex; align-items: center; justify-content: center;
+  max-height: 132px; overflow-y: auto;
+}
+#slots-strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; justify-content: center; }
+/* Квадратные слоты; 0 и 1 одинаковой яркости — отличаются только символом */
+.slot {
+  width: 50px; height: 50px; border: 2px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: var(--green); text-shadow: 0 0 12px var(--green);
+  position: relative; transition: all .12s; background: rgba(0,255,156,.07);
+}
+/* 0 и 1 выглядят полностью одинаково — отличается только цифра */
+.slot.dbg-flip { cursor: crosshair; }
+/* Кустарный интерфейс: кликабельный бит (переворот раз в ход за 1 ХП) */
+.slot.home-flip { cursor: crosshair; }
+.slot.home-flip:hover { border-color: var(--amber); box-shadow: 0 0 12px var(--amber); }
+/* Перевёрнутый кустарным интерфейсом бит — тот же глитч-строб, что у сломанных карт */
+.slot.glitched {
+  border-color: var(--red); color: var(--red); text-shadow: 0 0 12px var(--red);
+  animation: cardglitch .55s steps(2, jump-none) infinite;
+}
+.slot.hl { border-color: var(--amber); background: rgba(0,255,156,.28); box-shadow: 0 0 16px var(--green); transform: translateY(-4px); }
+/* Закрытый слот — «сломанный» пиксель: цифра исчезает, остаётся только символ ✕ */
+.slot.closed { border-color: var(--red); color: transparent; text-shadow: none; background: rgba(255,34,68,.10); box-shadow: inset 0 0 8px rgba(255,34,68,.45); }
+.slot.closed::after {
+  content: "✕"; position: absolute; font-size: 30px; color: var(--red); opacity: .85;
+  animation: glyphjit .4s steps(2, jump-none) infinite;
+}
+.slot.closed.corp { border-color: var(--blue); color: transparent; background: rgba(41,182,246,.12); }
+.slot.closed.corp::after { content: "⇄"; color: var(--blue); font-size: 22px; }
+/* Перегретый слот (бонус перегрева военного): живёт один ход, незакрытый
+   бьёт двойным уроном. Раскалённый металл + пульс. */
+.slot.overheated {
+  border-color: #ff8800; color: #ffb066;
+  background: repeating-linear-gradient(45deg, rgba(255,90,0,.22) 0 4px, rgba(60,10,0,.35) 4px 8px);
+  text-shadow: 0 0 10px #ff6600;
+  animation: hotpulse .8s ease-in-out infinite;
+}
+.slot.overheated.closed { animation: none; opacity: .5; }
+@keyframes hotpulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(255,120,0,.3); }
+  50% { box-shadow: 0 0 16px rgba(255,120,0,.85); }
+}
+
+/* ---------- Полировка: «живость» интерфейса ---------- */
+/* Сканлайны поверх всего экрана: тонкие, медленно ползут вниз. */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 99990; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0 1px, transparent 1px 3px);
+  animation: scanlines 9s linear infinite;
+  opacity: .5;
+}
+@keyframes scanlines { from { background-position: 0 0; } to { background-position: 0 120px; } }
+/* Баннер хода пульсирует, когда ход ваш. */
+#turn-banner.mine { color: var(--green); animation: turnpulse 1.1s ease-in-out infinite; }
+@keyframes turnpulse {
+  0%, 100% { text-shadow: 0 0 6px rgba(0,255,156,.35); }
+  50% { text-shadow: 0 0 18px rgba(0,255,156,.9), 0 0 34px rgba(0,255,156,.4); }
+}
+/* Новое сообщение в чате — плавно «въезжает». */
+.chat-log .msg { animation: slidein .18s ease-out; }
+/* Активный антивирус в статусе — красная тревога. */
+.av-on { color: var(--red); animation: blink 1s infinite; }
+/* Кнопки: свечение при наведении и «провал» при нажатии. */
+.btn { transition: box-shadow .12s, transform .06s, border-color .12s; }
+.btn:hover { box-shadow: 0 0 12px rgba(0,255,156,.35); }
+.btn:active { transform: translateY(1px) scale(.98); }
+/* Заголовки панелей: едва заметное дыхание свечения. */
+.panel h2 { text-shadow: 0 0 8px rgba(0,255,156,.18); }
+
+/* ---------- Змейка (ожидание хода) ---------- */
+#snake-offer {
+  position: fixed; right: 18px; bottom: 170px; z-index: 9500;
+}
+.snake-offer-box {
+  border: 1px solid var(--blue); padding: 14px 18px;
+  background: rgba(2, 8, 18, .96); box-shadow: 0 0 24px rgba(41,182,246,.3);
+  animation: slidein .25s ease-out;
+}
+.snake-offer-box p { font-size: 12px; margin: 8px 0; }
+#snake-window {
+  position: fixed; right: 18px; bottom: 170px; z-index: 9500;
+  border: 1px solid var(--green); background: #020a05;
+  box-shadow: 0 0 24px rgba(0,255,156,.25); user-select: none;
+}
+#snake-window.my-turn #snake-title { animation: blink 1s infinite; color: var(--amber); }
+#snake-title {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px; background: rgba(0,255,156,.08); cursor: move;
+  font-size: 12px; letter-spacing: 1px;
+}
+#snake-title b { color: var(--amber); }
+#snake-close { background: none; border: none; color: var(--red); cursor: pointer; font-size: 13px; }
+#snake-close:hover { text-shadow: 0 0 8px var(--red); }
+#snake-canvas { display: block; image-rendering: pixelated; touch-action: none; } /* touch-action: свайпы по полю — только змейке, не браузеру */
+.snake-hint { font-size: 10px; text-align: center; padding: 4px 0; }
+
+/* ---------- Рука: веер карт (Hearthstone-style), поверх низа экрана ---------- */
+/* Веер центрируется по ИГРОВОЙ области, а не по окну: сдвиг = половина
+   (сайдбар + отступы сетки). */
+#hand-fan {
+  position: fixed; bottom: 0; left: calc(50% + (var(--sidebar-w, 250px) + 20px) / 2); transform: translateX(-50%);
+  z-index: 9000; display: flex; align-items: flex-end; gap: 0;
+  padding: 0 30px; pointer-events: none;
+}
+#hand-fan.hidden { display: none; }
+/* Зона руки — фиксированная ширина на FAN_HALF*2+1 слотов (9 × 96px = 864):
+   веер не «разъезжается» от числа карт. Веер ЗАЦИКЛЕН — у руки нет краёв,
+   стрелок и рамок: вращение бесконечное (колёсико мыши / стрелки ← →). */
+#fan-cards {
+  display: flex; align-items: flex-end; justify-content: center;
+  width: 864px; box-sizing: border-box;
+  pointer-events: none; position: relative;
+}
+
+.hand-card {
+  flex: none; width: 106px; min-height: 134px; border: 1px solid var(--green); border-left-width: 4px;
+  background: rgba(4, 18, 11, .94);
+  padding: 6px; cursor: grab; user-select: none; transition: transform .12s, box-shadow .12s;
+  position: relative; overflow: hidden;
+}
+/* Веер: каждая карта живёт в НЕПОДВИЖНОЙ хит-зоне .fan-slot. Наведение ловит
+   слот, а карта внутри поднимается — её движение не выбивает курсор из зоны,
+   поэтому нет мерцания на стыках карт. Поворот/дугу задаёт JS через --fan-t. */
+.fan-slot {
+  flex: none; width: 88px; height: 140px; position: relative;
+  display: flex; justify-content: center; align-items: flex-end;
+  pointer-events: auto;
+}
+.fan-slot:hover { z-index: 100 !important; }
+.fan-card {
+  margin: 0; transform-origin: 50% 100%;
+  transform: var(--fan-t, none);
+  pointer-events: auto;
+  will-change: transform;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.55);
+  transition: transform .12s, box-shadow .12s, opacity .12s;
+}
+/* FLIP-прокрутка веера: на первый кадр позу ставим мгновенно, без перехода */
+.fan-card.no-anim { transition: none !important; }
+.fan-slot:hover .fan-card {
+  opacity: 1 !important;
+  outline: 2px solid var(--green);
+  box-shadow: 0 0 18px var(--green-dim), 0 6px 18px rgba(0,0,0,.65);
+}
+/* Подъём карты при наведении — только в обычном десктопном интерфейсе
+   (веер/классика). В списке вместо подъёма — превью-окно; на телефоне hover нет.
+   В крупном интерфейсе подъём остаётся, но рука там — отдельная полоса
+   раскладки с запасом сверху, так что слоты не накрываются. */
+body:not(.hand-list):not(.mobile) .fan-slot:hover .fan-card {
+  transform: rotate(0deg) translateY(-52px) scale(1.14) !important;
+}
+/* Во время перетаскивания НИ ОДНА карта веера не поднимается: :hover следит за
+   курсором даже во время драга, и поднятая карта дотягивается до слотов и
+   перехватывает dragover/drop. ВАЖНО: pointer-events трогать НЕЛЬЗЯ —
+   Chromium тогда отменяет нативный драг. Меняем только transform/z-index. */
+#hand-fan.dragging-active .fan-slot .fan-card,
+#hand-fan.dragging-active .fan-slot:hover .fan-card {
+  transform: var(--fan-t) !important;
+}
+/* Перетаскиваемая карта «достаётся из руки»: в веере она прячется
+   (место в веере сохраняется), а за курсором летит призрак .drag-ghost.
+   opacity, НЕ pointer-events — иначе Chromium отменит нативный драг. */
+.hand-card.dragging { opacity: 0; }
+/* Призрак карты, следующий за курсором. pointer-events:none — физически
+   не может перехватить наведение на слоты. Позиция задаётся ТОЛЬКО через
+   transform из JS (двигается на композиторе, без пересчёта раскладки),
+   поэтому transform тут без !important — инлайн-стиль его переопределяет. */
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 9600; pointer-events: none;
+  margin: 0 !important; transform: scale(.55); transform-origin: 0 0;
+  opacity: .85; box-shadow: 0 8px 26px rgba(0,0,0,.75);
+  will-change: transform;
+  /* У карт веера есть transition на transform (поднятие при наведении).
+     Призраку она ВРЕДИТ: без этого отключения каждое движение анимируется
+     за .12s и карта «долетает» из угла экрана до курсора. */
+  transition: none !important;
+}
+.hand-card.broken { border-color: var(--red); }
+/* Заблокированная карта (Сторонний айпи после чужого бонуса) — потушена */
+.hand-card.blocked { opacity: .38; filter: grayscale(.8); border-style: dashed; }
+.fan-slot:hover .fan-card.blocked { transform: var(--fan-t) !important; box-shadow: none; }
+/* полупрозрачный принт по типу программы — визуально отличает карты */
+.hand-card .p-print {
+  position: absolute; right: -6px; bottom: -14px; font-size: 74px;
+  opacity: .14; pointer-events: none; line-height: 1;
+}
+.hand-card .p-name { color: var(--green); font-size: 11px; font-weight: bold; line-height: 1.15; }
+.hand-card .p-cons {
+  color: var(--amber); letter-spacing: 3px; font-size: 17px; font-weight: bold;
+  margin: 4px 0; text-shadow: 0 0 8px rgba(255,176,32,.5);
+}
+.hand-card .p-desc { font-size: 9px; opacity: .8; line-height: 1.25; max-height: 45px; overflow: hidden; }
+.hand-card .p-broken-tag { color: var(--red); font-size: 9px; }
+
+/* Цветовые акценты по типу программы */
+/* Цвета типов программ ФИКСИРОВАНЫ (не от темы): у каждой программы свой цвет. */
+.kind-move   { border-left-color: #5aa9ff !important; }
+.kind-move   .p-name, .kind-move .p-print { color: #5aa9ff; }
+.kind-damage { border-left-color: #ff5566 !important; }
+.kind-damage .p-name, .kind-damage .p-print { color: #ff5566; }
+.kind-defense{ border-left-color: #ffd740 !important; }
+.kind-defense .p-name, .kind-defense .p-print { color: #ffd740; }
+.kind-mass   { border-left-color: #b388ff !important; }
+.kind-mass   .p-name, .kind-mass .p-print { color: #b388ff; }
+.kind-utility{ border-left-color: #00e68a !important; }
+.kind-utility .p-name, .kind-utility .p-print { color: #00e68a; }
+
+#target-hint { min-height: 18px; color: var(--amber); }
+
+/* Перегрев — весь интерфейс краснеет. !important обязателен: блоки тем
+   (theme-amber/ice/ultra/terminal) объявляют те же переменные с той же
+   специфичностью, а ultra/terminal идут в файле позже и иначе перекрывают
+   перегрев — интерфейс не краснел на нестандартных темах. */
+body.overheat {
+  --green: #ff5533 !important;
+  --green-dim: #8a2415 !important;
+  --line: #5a1a10 !important;
+  --text: #ffc9b8 !important;
+  --panel: #160a06 !important;
+  --bg: #0d0503 !important;
+}
+body.overheat #turn-banner { color: var(--red); }
+
+/* Радио-плеер */
+.player-controls { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.player-controls .btn { flex: none; }
+/* Ползунок громкости: min-width: 0 — иначе вылезает за пределы панели */
+.player-controls input[type="range"] {
+  flex: 1 1 0; min-width: 0; width: auto;
+  -webkit-appearance: none; appearance: none;
+  background: transparent; border: none; padding: 0; height: 16px; cursor: pointer;
+}
+.player-controls input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; background: #000; border: 1px solid var(--line);
+}
+.player-controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 10px; height: 14px; margin-top: -6px;
+  background: var(--green); border: 1px solid #000; box-shadow: 0 0 6px var(--green);
+}
+.player-controls input[type="range"]::-moz-range-track {
+  height: 4px; background: #000; border: 1px solid var(--line);
+}
+.player-controls input[type="range"]::-moz-range-thumb {
+  width: 10px; height: 14px; border-radius: 0;
+  background: var(--green); border: 1px solid #000; box-shadow: 0 0 6px var(--green);
+}
+#playlist { list-style: none; max-height: 150px; overflow-y: auto; font-size: 11px; }
+#playlist li { padding: 3px 6px; cursor: pointer; border-left: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+#playlist li:hover { background: rgba(0,255,156,.08); }
+#playlist li.playing { border-left-color: var(--green); color: var(--green); }
+#playlist .pl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#playlist .pl-del {
+  flex: none; background: none; border: none; color: var(--red); cursor: pointer;
+  font-size: 11px; padding: 0 2px; opacity: .35;
+}
+#playlist li:hover .pl-del { opacity: 1; }
+#playlist .pl-del:hover { text-shadow: 0 0 8px var(--red); }
+
+/* Бегущая строка для длинных названий треков: медленное «ползание»,
+   текст продублирован — петля бесшовная (см. setTrackName в audio.js). */
+.marquee-inner { display: inline-block; white-space: nowrap; }
+.marquee .marquee-inner { animation: marquee 12s linear infinite; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.upload-btn { display: inline-block; text-align: center; }
+#track-name { font-size: 11px; }
+
+/* Компактная строка радио в сайдбаре */
+#radio-mini { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#radio-mini #track-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+
+/* Перетаскиваемое окно инструментов карты (хост, фаза подготовки) */
+#map-tools-window {
+  position: fixed; right: 24px; top: 70px; z-index: 9400;
+  width: 380px; max-height: 82vh; background: var(--panel); border: 1px solid var(--amber);
+  box-shadow: 0 0 24px rgba(255,176,32,.22), 0 8px 30px rgba(0,0,0,.6);
+  display: flex; flex-direction: column;
+}
+#map-tools-window.hidden { display: none; }
+#map-tools-title {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(255,176,32,.12); color: var(--amber); padding: 6px 10px;
+  cursor: move; user-select: none; font-weight: bold; font-size: 12px;
+}
+#map-tools-close-btn {
+  background: none; border: none; color: var(--red); cursor: pointer;
+  font-family: inherit; font-size: 13px; padding: 0 4px;
+}
+#map-tools-close-btn:hover { text-shadow: 0 0 8px var(--red); }
+#map-tools-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.mt-block { border: 1px dashed var(--line); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.mt-label { color: var(--amber); font-size: 11px; font-weight: bold; letter-spacing: 1px; }
+.mt-desc { font-size: 10px; opacity: .75; line-height: 1.35; margin: 0; }
+#map-tools-window .map-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#map-tools-window .obj-config { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#preset-density { flex: 1; min-width: 100px; }
+#tpl-list { display: flex; flex-direction: column; gap: 4px; }
+.tpl-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.tpl-row .tpl-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Перетаскиваемое окно радио */
+#radio-window {
+  position: fixed; right: 24px; bottom: 24px; z-index: 9400;
+  width: 300px; background: var(--panel); border: 1px solid var(--blue);
+  box-shadow: 0 0 24px rgba(41,182,246,.25), 0 8px 30px rgba(0,0,0,.6);
+  display: flex; flex-direction: column;
+}
+#radio-window.hidden { display: none; }
+#radio-title {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(41,182,246,.12); color: var(--blue); padding: 6px 10px;
+  cursor: move; user-select: none; font-weight: bold; font-size: 12px;
+}
+#radio-close-btn {
+  background: none; border: none; color: var(--red); cursor: pointer;
+  font-family: inherit; font-size: 13px; padding: 0 4px;
+}
+#radio-close-btn:hover { text-shadow: 0 0 8px var(--red); }
+#radio-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+#radio-body .player-controls { display: flex; gap: 6px; align-items: center; }
+#track-name-win { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Оверлеи ---------- */
+.overlay {
+  display: none; position: fixed; inset: 0; z-index: 9600;
+  background: rgba(2,6,4,.92); align-items: center; justify-content: center;
+}
+.overlay.show { display: flex; }
+.death-box { text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center; max-width: 640px; }
+.death-box h1 { color: var(--red); letter-spacing: 4px; text-shadow: 0 0 20px var(--red); font-size: 28px; }
+/* Смерть — терминал «ломается»: дёргается и раздваивается по каналам */
+#overlay-death .death-box { animation: deathjit .45s steps(2, jump-none) infinite; }
+#overlay-death h1 { animation: deathrgb .3s steps(2, jump-none) infinite; }
+@keyframes deathjit {
+  0%   { transform: translate(0,0); }
+  50%  { transform: translate(-3px,2px) skewX(-.6deg); }
+  100% { transform: translate(2px,-1px); }
+}
+@keyframes deathrgb {
+  0%   { text-shadow: -3px 0 rgba(255,34,68,.9), 3px 0 rgba(41,182,246,.9); }
+  50%  { text-shadow: 3px 0 rgba(255,34,68,.9), -3px 0 rgba(41,182,246,.9), 0 0 20px var(--red); }
+  100% { text-shadow: -2px 0 rgba(41,182,246,.9), 2px 0 rgba(255,34,68,.9); }
+}
+.death-box.win h1 { color: var(--green); text-shadow: 0 0 20px var(--green); }
+
+/* Перезагрузка (0 мощности): янтарный cmd-терминал — визуально ОТЛИЧАЕТСЯ
+   от красного экрана смерти. Фон — бегущий консольный поток, сверху окно
+   с последовательностью загрузки и бегущим индикатором. */
+#overlay-reboot { background: rgba(6, 4, 0, .94); }
+#reboot-bg {
+  position: absolute; inset: 0; margin: 0; padding: 8px;
+  font-size: 11px; line-height: 1.35; color: rgba(255, 179, 0, .18);
+  white-space: pre-wrap; overflow: hidden; user-select: none; pointer-events: none;
+  word-break: break-all;
+}
+#reboot-term {
+  position: relative; z-index: 1; width: min(620px, 94vw);
+  border: 1px solid #ffb300; background: rgba(12, 8, 0, .97);
+  box-shadow: 0 0 30px rgba(255, 179, 0, .35), inset 0 0 60px rgba(255, 179, 0, .06);
+  display: flex; flex-direction: column; text-align: left;
+  animation: rebootjit 3.2s steps(2, jump-none) infinite; /* редкий лёгкий дёрг — терминал «живой» */
+}
+@keyframes rebootjit {
+  0%, 92% { transform: translate(0, 0); }
+  96%     { transform: translate(-2px, 1px); }
+  100%    { transform: translate(1px, -1px); }
+}
+#reboot-term-head {
+  background: #ffb300; color: #181000; font-weight: bold;
+  padding: 4px 10px; font-size: 12px; letter-spacing: 1px;
+}
+#reboot-log {
+  margin: 0; padding: 12px 14px; min-height: 240px;
+  color: #ffb300; font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+  text-shadow: 0 0 8px rgba(255, 179, 0, .5);
+}
+#reboot-log .acc-red { color: var(--red); text-shadow: 0 0 8px var(--red); }
+#reboot-bar-wrap { height: 14px; margin: 0 14px; border: 1px solid #ffb300; padding: 2px; }
+#reboot-bar {
+  height: 100%; width: 15%;
+  background: repeating-linear-gradient(90deg, #ffb300 0 8px, transparent 8px 14px);
+  animation: rebootload 2.2s linear infinite;
+}
+@keyframes rebootload {
+  0%   { margin-left: 0;   width: 15%; }
+  50%  { width: 45%; }
+  100% { margin-left: 85%; width: 15%; }
+}
+#overlay-reboot p.dim { padding: 10px 14px 12px; margin: 0; }
+
+/* Окно разлома данных: список программ с кликабельными битами потребления */
+.rift-box { border: 1px solid #ff2fd6; padding: 22px 26px; background: rgba(20,2,16,.96); box-shadow: 0 0 30px rgba(255,47,214,.35); }
+.rift-box h2 { color: #ff2fd6; text-shadow: 0 0 14px #ff2fd6; margin: 0; }
+.rift-box p { margin: 0; }
+#rift-list { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; width: 100%; }
+.rift-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); padding: 6px 10px; }
+.rift-bits { display: inline-flex; gap: 4px; }
+.rift-bits .bit-btn { min-width: 30px; font-size: 14px; }
+.rift-bits .bit-btn:hover { border-color: #ff2fd6; color: #ff2fd6; }
+.death-icon { font-size: 90px; color: var(--red); text-shadow: 0 0 40px var(--red); animation: glitch 1.2s infinite; }
+.blink { animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes slidein { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-3px, 2px); }
+  40% { transform: translate(3px, -2px); }
+  60% { transform: translate(-2px, -2px); }
+  80% { transform: translate(2px, 2px); }
+}
+
+@media (max-width: 1200px) {
+  body { --sidebar-w: 210px; }
+  .game-layout { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+  .lobby-grid { grid-template-columns: 1fr; overflow: auto; }
+}
+
+/* ==========================================================================
+   Дополнения 11-й итерации
+   ========================================================================== */
+
+/* Лёгкий «лаг» экрана при перегреве военного интерфейса:
+   слабее, чем ui-lag при низком ХП, — редкие микро-подёргивания */
+body.ui-lag-soft #screen-game { animation: uilagsoft .24s steps(2, jump-none); }
+@keyframes uilagsoft {
+  0%   { transform: translate(0,0); filter: none; }
+  50%  { transform: translate(-2px,1px); filter: blur(.7px) saturate(1.35); }
+  100% { transform: translate(0,0); filter: none; }
+}
+
+/* Парный телепорт — отличается от обычного цветом и значком */
+.cell.obj-portal2 { background: rgba(255,110,64,.08); }
+.cell.obj-portal2::after {
+  content: "◉"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .66);
+  color: var(--obj-color, #ff6e40); text-shadow: 0 0 8px var(--obj-color, #ff6e40);
+  animation: portalspin 2s linear infinite reverse;
+}
+
+/* Точка контроля (режим «Захват территории») — пульсирующий ромб */
+.cell.obj-point { background: rgba(0,229,255,.07); }
+.cell.obj-point::after {
+  content: "◈"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .72);
+  color: var(--obj-color, #00e5ff); text-shadow: 0 0 10px var(--obj-color, #00e5ff);
+  animation: pointpulse 1.4s ease-in-out infinite;
+}
+@keyframes pointpulse {
+  0%, 100% { opacity: .55; transform: scale(.85); }
+  50%      { opacity: 1;   transform: scale(1.1); }
+}
+
+/* Разлом данных — ТОТ ЖЕ красно-розовый глитч-строб, что у сломанных карт
+   (cardglitch), чтобы разлом было видно издалека. */
+.cell.obj-rift { background: rgba(255,47,214,.16); animation: cardglitch .55s steps(2, jump-none) infinite; }
+.cell.obj-rift::after {
+  content: "⌁"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .9);
+  color: var(--obj-color, #ff2fd6); text-shadow: 0 0 12px var(--obj-color, #ff2fd6);
+}
+
+/* Пиксель спауна — белая метка стартовой клетки */
+.cell.obj-spawn { background: rgba(232,255,232,.06); }
+.cell.obj-spawn::after {
+  content: "⦿"; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell, 18px) * .66);
+  color: var(--obj-color, #e8ffe8); text-shadow: 0 0 8px var(--obj-color, #e8ffe8);
+  animation: pointpulse 1.8s ease-in-out infinite;
+}
+
+/* Подсветка пикселей спауна на этапе расстановки */
+.cell.spawn-hl { box-shadow: inset 0 0 0 2px rgba(232,255,232,.8), 0 0 10px rgba(232,255,232,.5); }
+
+/* Цифровая копия («Разделение сигнала») — полупрозрачный призрак владельца */
+.pawn.copy {
+  opacity: .55; border: 1px dashed currentColor;
+  animation: copyflick 1.1s steps(2, jump-none) infinite;
+}
+@keyframes copyflick {
+  0%, 100% { opacity: .55; }
+  50%      { opacity: .3; }
+}
+
+/* Визуальная защита пешек: Брандмауэр — янтарное кольцо, AI-защита — фиолетовое,
+   Торрент — голубое кольцо (видит только владелец) */
+.pawn.sh-fw { box-shadow: 0 0 0 2px var(--amber), 0 0 12px var(--amber) !important; }
+.pawn.sh-ai { box-shadow: 0 0 0 2px #b388ff, 0 0 12px #b388ff !important; }
+.pawn.sh-fw.sh-ai { box-shadow: 0 0 0 2px var(--amber), 0 0 0 4px #b388ff, 0 0 14px #b388ff !important; }
+.pawn.sh-tr { box-shadow: 0 0 0 2px #4dd0e1, 0 0 12px #4dd0e1 !important; }
+
+/* Класс «поддержка» — розовый акцент */
+.kind-support { border-left-color: #f48fb1 !important; }
+.kind-support .p-name, .kind-support .p-print { color: #f48fb1; }
+
+/* Сломанная программа в руке «глючит»: мерцание цвета и свечения.
+   transform НЕ трогаем — он задействован дугой веера (--fan-t). */
+.hand-card.broken { animation: cardglitch .55s steps(2, jump-none) infinite; }
+@keyframes cardglitch {
+  0%   { filter: none; box-shadow: 0 -2px 12px rgba(0,0,0,.55); }
+  50%  { filter: hue-rotate(-40deg) contrast(1.5) brightness(1.15);
+         box-shadow: 0 0 14px rgba(255,34,68,.65); }
+  100% { filter: saturate(1.6); box-shadow: 0 -2px 12px rgba(0,0,0,.55); }
+}
+
+/* Карта «КодШифр»: ЖЁСТКО в левом нижнем углу экрана — под сайдбаром,
+   левее веера руки. Там всегда пусто, карта не обрезается. */
+#cipher-card {
+  position: fixed; left: 12px; bottom: 12px; z-index: 9000;
+}
+#cipher-card.hidden { display: none; }
+.hand-card.cipher {
+  border-color: #00e5ff; border-left-width: 4px;
+  box-shadow: 0 0 18px rgba(0,229,255,.5);
+  animation: cipherglow 1.6s ease-in-out infinite;
+}
+.hand-card.cipher .p-name, .hand-card.cipher .p-print { color: #00e5ff; }
+@keyframes cipherglow {
+  0%, 100% { box-shadow: 0 0 10px rgba(0,229,255,.35); }
+  50%      { box-shadow: 0 0 24px rgba(0,229,255,.75); }
+}
+
+/* Выбор силы «Андервольтинга» */
+#amount-picker { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+#amount-picker.hidden { display: none; }
+
+/* Окно ИИ-помощника («АИ защита») — фиолетовое вместо красного */
+.err-window.ai-window {
+  border-color: #b388ff; color: #e2ccff;
+  box-shadow: 0 0 18px rgba(179,136,255,.55);
+  animation-duration: 3.6s;
+}
+.err-window.ai-window .err-title { background: #b388ff; }
+
+/* Уголок изменения размера окна радио (единственный способ менять размер) */
+#radio-window { min-width: 240px; min-height: 160px; }
+#radio-window #radio-body { overflow-y: auto; }
+#radio-resize {
+  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+  cursor: nwse-resize; opacity: .9;
+  background: linear-gradient(135deg, transparent 50%, var(--blue) 50%);
+}
+#radio-resize:hover { filter: brightness(1.5); }
+
+/* ==========================================================================
+   Дополнения 12-й итерации
+   ========================================================================== */
+
+/* Панели сайдбара не сжимаются: при нехватке места (например, открытая
+   DEBUG-панель) сайдбар просто скроллится, а чат и радио не наезжают
+   друг на друга. */
+#game-sidebar > .panel { flex-shrink: 0; }
+
+/* Номер пары парного телепорта — маленькая цифра в правом нижнем углу
+   клетки (сам значок ◉ рисуется через ::after). */
+.cell.obj-portal2::before {
+  content: attr(data-pair); position: absolute; right: 0; bottom: 0;
+  font-size: calc(var(--cell, 18px) * .38); line-height: 1; z-index: 1;
+  color: var(--obj-color, #ff6e40); text-shadow: 0 0 4px var(--obj-color, #ff6e40);
+}
+
+/* Буква команды на точке контроля (командный режим) — в левом верхнем углу */
+.cell.obj-point::before {
+  content: attr(data-team); position: absolute; left: 0; top: 0;
+  font-size: calc(var(--cell, 18px) * .42); line-height: 1; z-index: 1;
+  font-weight: bold;
+  color: var(--obj-color, #00e5ff); text-shadow: 0 0 5px var(--obj-color, #00e5ff);
+}
+
+/* ==========================================================================
+   Дополнения 13-й итерации
+   ========================================================================== */
+
+/* Окно правил на экране входа: тёмный фон + окно с iframe на rules.html */
+#rules-modal {
+  position: fixed; inset: 0; z-index: 9900;
+  background: rgba(0,0,0,.78); display: flex; align-items: center; justify-content: center;
+}
+#rules-modal.hidden { display: none; }
+#rules-window {
+  width: min(920px, 92vw); height: min(720px, 88vh);
+  background: var(--panel); border: 1px solid var(--green);
+  box-shadow: 0 0 30px rgba(0,255,156,.25);
+  display: flex; flex-direction: column;
+}
+#rules-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px dashed var(--line);
+  color: var(--green); font-size: 13px; letter-spacing: 2px;
+}
+#rules-frame { flex: 1; border: 0; background: #020805; }
+
+/* Кнопка кика — маленький красный крестик в строке игрока (видит только хост) */
+.kick-btn {
+  background: none;
+  border: 1px solid var(--red);
+  color: var(--red);
+  width: 18px; height: 18px;
+  line-height: 1; font-size: 11px;
+  padding: 0; margin-left: 6px;
+  cursor: pointer;
+  flex: none;
+}
+.kick-btn:hover { background: var(--red); color: #000; }
+
+/* Во время драга ЧЁТНОЙ программы (2, 4 бита...) центр окна приходится на ШОВ
+   между слотами — показываем янтарные засечки в швах, как на линейке. */
+#slots-strip.drag-even .slot::before {
+  content: ''; position: absolute; right: -5px; top: 15%; height: 70%; width: 2px;
+  background: var(--amber); opacity: .9; box-shadow: 0 0 6px var(--amber);
+  pointer-events: none; z-index: 3;
+}
+#slots-strip.drag-even .slot:last-child::before { display: none; }
+
+/* ==========================================================================
+   Итерация 24: настройки вида (темы, размер UI, дизайн руки, размер карты),
+   мобильный режим. Всё ЛОКАЛЬНО для каждого игрока (localStorage).
+   ========================================================================== */
+
+/* ── Новые цветовые темы ───────────────────────────────────────────────── */
+body.theme-ultra { /* УЛЬТРА: фиолетовый неон */
+  --bg: #070310;
+  --panel: #0d0720;
+  --line: #2e1a56;
+  --green: #b26bff;
+  --green-dim: #5a2f8a;
+  --text: #e0ccff;
+  --amber: #ffd740;
+  --red: #ff5566;
+  --blue: #35c4ff;
+}
+body.theme-terminal { /* ТЕРМИНАЛ: белый текст на чёрном, минимализм */
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --line: #3a3a3a;
+  --green: #e8e8e8;
+  --green-dim: #777777;
+  --text: #d8d8d8;
+  --amber: #cccccc;
+  --red: #ff5566;
+  --blue: #9adfff;
+}
+
+/* ── Размер интерфейса (zoom масштабирует весь UI целиком) ────────────── */
+body.ui-compact { zoom: .88; }
+body.ui-large { zoom: 1.14; }
+/* ── КРУПНЫЙ интерфейс: другая КОМПОНОВКА, а не просто zoom-клон ──────────
+   Рука встроена в сетку отдельной полосой под слотами: она физически не может
+   накрыть карту сектора или слоты. Сверху полосы — запас под подъём карты. */
+body.ui-large .game-layout {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "sidebar map"
+    "sidebar slots"
+    "hand hand";
+  padding-bottom: 8px;
+}
+body.ui-large #hand-fan {
+  grid-area: hand; position: static; transform: none;
+  padding: 58px 30px 0; justify-content: center;
+  border-top: 1px dashed var(--line);
+}
+body.ui-large #fan-cards { width: min(864px, 96vw); }
+
+/* ── Поповер настроек вида ─────────────────────────────────────────────── */
+#prefs-pop {
+  position: fixed; top: 52px; right: 10px; z-index: 9500; width: 250px;
+  background: var(--panel); border: 1px solid var(--green); padding: 12px 14px;
+  box-shadow: 0 0 24px rgba(0,0,0,.8), 0 0 12px var(--green-dim);
+}
+#prefs-pop.hidden { display: none; }
+#prefs-pop h3 { color: var(--green); font-size: 13px; margin-bottom: 6px; }
+#prefs-pop label { display: block; margin: 10px 0 2px; font-size: 12px; color: var(--text); }
+#prefs-pop select, #prefs-pop input[type="range"] { width: 100%; margin-top: 4px; }
+#prefs-pop .prefs-note { font-size: 11px; margin-top: 10px; }
+
+/* ── Дизайн руки: КЛАССИКА (плоский ряд из 9 карт + стрелки) ──────────── */
+/* Стрелки создаются скриптом только в этом режиме; в веере их нет вовсе. */
+.fan-scroll {
+  display: none; position: absolute; bottom: 46px; z-index: 60;
+  color: var(--green-dim); font-size: 30px; cursor: pointer; user-select: none;
+  padding: 4px 10px; pointer-events: auto; line-height: 1;
+}
+.fan-scroll:hover { color: var(--green); text-shadow: 0 0 10px var(--green); }
+.fan-scroll .cnt { font-size: 14px; vertical-align: middle; }
+.fan-scroll.left { left: -8px; }
+.fan-scroll.right { right: -8px; }
+body.hand-classic .fan-scroll { display: block; }
+body.hand-classic .fan-scroll.hidden { display: none; } /* карт мало — стрелки не нужны */
+body.hand-classic #fan-cards { width: 820px; }
+body.hand-classic .cls-slot { width: 88px; height: 152px; }
+/* В классике карты не гаснут и не уменьшаются к краям — только лёгкий наклон */
+body.hand-classic .fan-card { opacity: 1 !important; }
+
+/* ── Дизайн руки: СПИСОК (все карты в ряд с горизонтальной прокруткой) ── */
+body.hand-list #hand-fan { left: 50%; padding: 0; }
+body.hand-list #fan-cards {
+  width: min(96vw, 900px); overflow-x: auto; justify-content: flex-start;
+  padding: 4px 8px 10px; pointer-events: auto;
+  background: rgba(0,0,0,.35); border-top: 1px solid var(--line);
+}
+body.hand-list .list-slot { width: 96px; height: 152px; }
+body.hand-list .fan-card:not(.drag-ghost) { transform: none !important; opacity: 1 !important; }
+
+/* ── Тап-режим (мобильные): подсветка «взведённой» карты и слотов ─────── */
+.fan-card.tap-armed {
+  outline: 3px solid var(--cyan); box-shadow: 0 0 18px var(--cyan);
+  opacity: 1 !important;
+}
+.slot.picked {
+  border-color: var(--cyan); color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan); background: rgba(0,229,255,.12);
+}
+.fan-card, .slot { touch-action: manipulation; } /* без задержки двойного тапа */
+
+/* ── МОБИЛЬНЫЙ РЕЖИМ (телефон: узкий экран или сенсорный указатель) ────── */
+body.mobile #game-topbar { flex-wrap: wrap; gap: 6px; padding: 6px; position: relative; z-index: 9500; background: var(--bg); }
+body.mobile #game-topbar .btn { min-height: 38px; }
+body.mobile .game-layout {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
+  grid-template-areas: "map" "slots" "sidebar";
+  padding: 6px 6px 185px; /* запас снизу под полоску руки */
+  gap: 6px;
+}
+body.mobile #game-map-panel { width: 100%; height: 42vh; align-self: auto; }
+body.mobile #game-sidebar { display: none; }
+body.mobile.panels-open #game-sidebar {
+  display: flex; flex-direction: column; gap: 6px;
+  position: fixed; left: 6px; right: 6px; top: 52px;
+  bottom: calc(6px + var(--kb, 0px)); /* --kb: высота клавиатуры (main.js) — поле чата не уходит под неё */
+  z-index: 9400;
+  background: var(--bg); border: 1px solid var(--line); padding: 6px; overflow-y: auto;
+}
+/* Слоты на телефоне: крупные тач-таргеты; при базовой мощности 12 ряд
+   переносится на вторую строку (flex-wrap) — это нормально. */
+body.mobile .slot { width: 44px; height: 44px; font-size: 22px; border-width: 2px; }
+body.mobile #slots-strip { gap: 5px; padding: 8px 4px; flex-wrap: wrap; justify-content: center; }
+/* Рука на телефоне: полоса с подложкой на всю ширину. pointer-events:auto —
+   полоса ловит СВАЙПЫ (прокрутка веера/классики пальцем, см. game.js). */
+body.mobile #hand-fan {
+  left: 50%; padding: 4px 0 6px; pointer-events: auto;
+  background: rgba(3, 10, 6, .94); border-top: 1px solid var(--line);
+}
+body.mobile #fan-cards { width: 100vw; }
+body.mobile .fan-slot { width: 64px; height: 104px; }
+body.mobile .hand-card { width: 80px; min-height: 100px; font-size: 10px; padding: 4px; }
+body.mobile .hand-card .p-print { font-size: 44px; }
+body.mobile .hand-card .p-desc { display: none; } /* на телефоне описание — в подсказке */
+body.mobile #cipher-card { left: 6px; bottom: 130px; }
+body.mobile #prefs-pop { left: 8px; right: 8px; top: 8px; width: auto; }
+body.mobile .err-window.scan-window { width: 92vw; min-width: 0; }
+body.mobile .setup-layout { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100vh; overflow-y: auto; }
+body.mobile .join-box { width: 94vw; }
+
+/* ── Мобильная оптимизация: снимаем с GPU самое тяжёлое ─────────────────
+   На слабых телефонах интерфейс заметно лагал — виновники ниже. */
+body.mobile #crt { display: none; }   /* полноэкранный слой с mix-blend-mode */
+body.mobile::after { display: none; } /* бесконечно ползущие сканлайны */
+/* Сотни клеток карты: бесконечные анимации (мерцание стен, вращение порталов,
+   пульс объектов) и glow-тени — перерисовка каждый кадр. На телефоне объекты
+   статичны, значки остаются (они в content). */
+body.mobile .cell,
+body.mobile .cell::after {
+  animation: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+/* Карты руки и слоты: без тяжёлых теней и лишнего композитинга. */
+body.mobile .fan-card { will-change: auto; box-shadow: 0 -2px 6px rgba(0,0,0,.5); }
+body.mobile .fan-card .p-print { opacity: .1; } /* крупный принт — без просчёта прозрачности теней */
+body.mobile .slot { box-shadow: none; }
+body.mobile .panel, body.mobile #game-topbar { box-shadow: none; }
+/* Пиксели игроков крупнее: пешка почти во всю клетку + контрастная обводка. */
+body.mobile .cell .pawn { inset: 1px; outline: 1px solid rgba(255,255,255,.55); outline-offset: -1px; }
+body.mobile .ascii-logo { font-size: 4px; }
+
+/* ── Превью карты: всплывающее окно при наведении — ТОЛЬКО для руки-«списка»
+   (веер/классика используют классический подъём карты в руке). ---------- */
+#card-preview {
+  position: fixed; right: 16px; bottom: 178px; z-index: 9450;
+  pointer-events: none;
+  transform: scale(1.45); transform-origin: 100% 100%;
+  filter: drop-shadow(0 0 18px rgba(0,0,0,.8));
+}
+#card-preview.hidden { display: none; }
+#card-preview .fan-card {
+  transform: none !important; opacity: 1 !important; margin: 0;
+  outline: 2px solid var(--green);
+}
+#card-preview .hand-card .p-desc { display: block; } /* в превью описание всегда видно */
+
+/* Мобильный: документу нужен скролл — иначе длинные экраны подготовки
+   обрезались (body overflow:hidden) и кнопка ДАЛЕЕ была недостижима. */
+body.mobile { overflow-y: auto; }
+body.mobile #card-preview { display: none; } /* на таче hover нет — превью не нужно */
+/* В крупном интерфейсе рука — полоса внизу раскладки: превью поднимаем выше неё. */
+body.ui-large #card-preview { bottom: 244px; }
+
+/* ── Полноэкранный просмотр карты (долгий тап на телефоне) ────────────── */
+#card-modal {
+  position: fixed; inset: 0; z-index: 9800;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+}
+#card-modal.hidden { display: none; }
+#card-modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .8); }
+#card-modal-box { position: relative; z-index: 1; }
+#card-modal-close { position: relative; z-index: 1; min-height: 44px; }
+/* Карта в модалке — крупная, с полным описанием (в мобильной руке оно скрыто). */
+#card-modal-box .fan-card {
+  transform: none !important; opacity: 1 !important;
+  width: 230px; min-height: 310px; font-size: 14px; padding: 12px;
+}
+#card-modal-box .fan-card .p-print { font-size: 96px; }
+#card-modal-box .fan-card .p-desc { display: block !important; font-size: 13px; }
+
+/* ── РАУНД 29: Матрица, сканер-перехват, мобильный редизайн ─────────────── */
+
+/* Кнопки, видимые только на телефоне */
+.mobile-only { display: none; }
+body.mobile .mobile-only { display: inline-block; }
+
+/* Матричный интерфейс: плавающее окно ставки.
+   ОБЫЧНЫЙ/КОМПАКТНЫЙ размер — справа от карты (свободная колонка у края),
+   КРУПНЫЙ — справа у полосы руки (там карта шире, край занят). */
+#matrix-zone {
+  position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
+  width: 210px; z-index: 600;
+  border: 2px dashed var(--cyan); background: rgba(0,12,14,.92);
+  padding: 12px; display: flex; flex-direction: column; gap: 6px;
+  align-items: center; text-align: center; font-size: 12px;
+  color: var(--cyan); text-shadow: 0 0 10px var(--cyan);
+}
+body.ui-large #matrix-zone { top: auto; bottom: 220px; transform: none; }
+body.ui-compact #matrix-zone { width: 180px; padding: 8px; }
+/* На телефоне окна под картой нет — ставка через долгий тап по карте. */
+body.mobile #matrix-zone { display: none !important; }
+#matrix-zone.hidden { display: none; }
+#matrix-zone.hot { background: rgba(0,229,255,.22); box-shadow: 0 0 18px var(--cyan); }
+#matrix-zone .dim { text-shadow: none; font-size: 11px; }
+
+/* Кнопка СТАВКА в модалке карты (телефон) */
+.matrix-bet-btn { margin-top: 10px; border-color: var(--cyan); color: var(--cyan); }
+
+/* «Барабан» слотов при ставке */
+@keyframes matrixspin {
+  0%   { transform: translateY(0);      filter: blur(0); }
+  20%  { transform: translateY(-6px);   filter: blur(2px) brightness(1.8); }
+  45%  { transform: translateY(5px);    filter: blur(2.5px) brightness(.6); }
+  70%  { transform: translateY(-4px);   filter: blur(2px) brightness(1.8); }
+  100% { transform: translateY(0);      filter: blur(0); }
+}
+#slots-strip.matrix-spin .slot { animation: matrixspin .8s linear; }
+
+/* Идеальный слот (ДЖЕКПОТ): золотой, считается и 0, и 1 */
+.slot.ideal {
+  border-color: #ffd740; color: #ffd740; text-shadow: 0 0 12px #ffd740;
+  background: rgba(255,215,64,.12); box-shadow: 0 0 14px rgba(255,215,64,.5);
+}
+
+/* Перехваченная сканером карта */
+.hand-card.stolen { border-left-color: var(--cyan); box-shadow: 0 0 10px rgba(0,229,255,.45); }
+.p-stolen-tag { color: var(--cyan); }
+
+/* Окно сканера: строки с кнопкой перехвата */
+.scan-window .scan-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; padding: 2px 0;
+}
+.scan-window .scan-cons { color: var(--cyan); }
+.scan-window .scan-hint { margin-top: 8px; font-size: 10px; }
+.scan-window .scan-steal { flex: none; }
+
+/* Мобильная полоска «чей ход» над картой сектора */
+#turn-strip {
+  display: none;
+}
+body.mobile #turn-strip:not(.hidden) {
+  display: block; text-align: center; font-size: 13px; letter-spacing: 1px;
+  border: 1px solid var(--line); background: rgba(0,255,156,.06);
+  padding: 6px; margin-bottom: 4px; cursor: pointer; user-select: none;
+}
+body.mobile #turn-strip.mine {
+  color: var(--green); text-shadow: 0 0 10px var(--green);
+  border-color: var(--green); animation: turnpulse 1.1s ease-in-out infinite;
+}
+
+/* Модалка со списком игроков (мобильная) */
+#players-modal .players-box { min-width: 260px; max-width: 92vw; }
+#players-modal .player-list { max-height: 50vh; overflow-y: auto; width: 100%; }
+
+/* Мобильная: окно параметров сессии уже — не уходит за правый край */
+body.mobile #screen-lobby .lobby-grid { padding: 6px; gap: 6px; }
+body.mobile #screen-lobby .panel { min-width: 0; padding: 8px; }
+body.mobile .settings-form { grid-template-columns: 1fr; gap: 6px; }
+body.mobile .settings-form input,
+body.mobile .settings-form select { max-width: 100%; }
+
+/* Мобильная: баннер в шапке не дублирует полоску над картой — компактнее */
+body.mobile #turn-banner { font-size: 12px; }
+
+/* ── РАУНД 30: цветные классы, таблица ставок, джекпот-вспышка ─────────── */
+
+/* Свой цвет каждому классу на экране выбора (и рамка, и имя) */
+.iface-card.iface-corp   { border-left-color: #4a9eff; }
+.iface-card.iface-corp b   { color: #4a9eff; }
+.iface-card.iface-mil    { border-left-color: #ff5566; }
+.iface-card.iface-mil b    { color: #ff5566; }
+.iface-card.iface-home   { border-left-color: #00e68a; }
+.iface-card.iface-home b   { color: #00e68a; }
+.iface-card.iface-matrix { border-left-color: #ffd740; }
+.iface-card.iface-matrix b { color: #ffd740; text-shadow: 0 0 8px rgba(255,215,64,.5); }
+.matrix-table-btn { margin-top: 8px; border-color: #ffd740; color: #ffd740; }
+
+/* Модалка таблицы ставок: НЕ закрывается сама — только крестиком/Esc */
+#matrix-help {
+  position: fixed; inset: 0; z-index: 9600; display: flex;
+  align-items: center; justify-content: center; background: rgba(0,0,0,.72);
+}
+#matrix-help.hidden { display: none; }
+#matrix-help-box {
+  width: min(680px, 94vw); max-height: 86vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid #ffd740; padding: 14px 16px;
+  box-shadow: 0 0 24px rgba(255,215,64,.25); font-size: 12px;
+}
+#matrix-help-box .err-title { display: flex; justify-content: space-between; color: #ffd740; margin-bottom: 10px; }
+#matrix-help-close { cursor: pointer; padding: 0 6px; }
+#matrix-help-close:hover { color: #fff; }
+#matrix-help-table { width: 100%; border-collapse: collapse; }
+#matrix-help-table th, #matrix-help-table td {
+  border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top;
+}
+#matrix-help-table th { color: #ffd740; font-size: 11px; letter-spacing: 1px; }
+#matrix-help-table .cons { white-space: nowrap; color: var(--cyan); font-weight: bold; }
+#matrix-help-table .gold { color: #ffd740; }
+
+/* ДЖЕКПОТ: золотая переливающаяся надпись на весь экран, тает за 1.5 с */
+.jackpot-flash {
+  position: fixed; inset: 0; z-index: 9900; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  animation: jackpotfade 1.5s ease-out forwards;
+}
+.jackpot-flash span {
+  font-size: clamp(42px, 11vw, 120px); font-weight: bold; letter-spacing: 6px;
+  background: linear-gradient(100deg, #8a6d00 0%, #ffd740 25%, #fff6c8 50%, #ffd740 75%, #8a6d00 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 18px rgba(255,215,64,.8));
+  animation: jackpotshine .7s linear infinite;
+}
+@keyframes jackpotshine { from { background-position: 0% 0; } to { background-position: 250% 0; } }
+@keyframes jackpotfade {
+  0% { opacity: 0; transform: scale(.7); }
+  12% { opacity: 1; transform: scale(1.06); }
+  22% { transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.02); }
+}

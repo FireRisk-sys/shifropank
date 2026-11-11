@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<title>ШИФРОПАНК // NETRUNNER TERMINAL</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="crt"></div>
+<div id="crack-overlay"></div>
+<div id="fx-layer"></div>
+<div id="card-preview" class="hidden"></div>
+
+<!-- Полноэкранный просмотр программы на телефоне: открывается ДОЛГИМ тапом
+     по карте руки (обычный тап остаётся взведением карты для розыгрыша). -->
+<div id="card-modal" class="hidden">
+  <div id="card-modal-backdrop"></div>
+  <div id="card-modal-box"></div>
+  <button id="card-modal-close" class="btn small">ЗАКРЫТЬ</button>
+</div>
+
+<!-- Настройки вида — ЛОКАЛЬНЫЕ (только этот браузер, localStorage).
+     Открываются кнопками 🎨 ВИД на экране входа и в шапке боя. -->
+<div id="prefs-pop" class="hidden">
+  <h3>▸ ВИД ИНТЕРФЕЙСА</h3>
+  <button id="eye-btn" class="btn small" title="режим для уставших глаз: приглушает все цвета и CRT-эффект">◐ ЗАТЕМНЕНИЕ: <b id="eye-state">ВЫКЛ</b></button>
+  <label>ЦВЕТ
+    <select id="pref-theme">
+      <option value="green">ЗЕЛЁНЫЙ</option>
+      <option value="amber">ЯНТАРЬ</option>
+      <option value="ice">ЛЁД</option>
+      <option value="ultra">УЛЬТРА</option>
+      <option value="terminal">ТЕРМИНАЛ</option>
+    </select>
+  </label>
+  <label>РАЗМЕР ИНТЕРФЕЙСА
+    <select id="pref-ui">
+      <option value="compact">КОМПАКТНЫЙ</option>
+      <option value="standard">ОБЫЧНЫЙ</option>
+      <option value="large">КРУПНЫЙ</option>
+    </select>
+  </label>
+  <label>ДИЗАЙН РУКИ
+    <select id="pref-hand">
+      <option value="fan">ВЕЕР (вращающаяся дуга)</option>
+      <option value="classic">КЛАССИКА (ряд + стрелки)</option>
+      <option value="list">СПИСОК (прокрутка)</option>
+    </select>
+  </label>
+  <label>РАЗМЕР КАРТЫ: <b id="pref-mapscale-val">100%</b>
+    <input type="range" id="pref-mapscale" min="50" max="200" step="5" value="100">
+  </label>
+  <p class="dim prefs-note">100% — карта целиком влезает в окно; больше — клетки крупнее, карта прокручивается внутри окна.</p>
+  <p class="dim prefs-note">Настройки хранятся только у вас в браузере и ни на кого больше не влияют.</p>
+</div>
+
+<!-- ======================= ВХОД ======================= -->
+<section id="screen-join" class="screen active">
+  <div class="join-box">
+    <pre class="ascii-logo">
+ ███████╗██╗  ██╗██╗███████╗██████╗  ██████╗ ██████╗  █████╗ ███╗   ██╗██╗  ██╗
+ ██╔════╝██║  ██║██║██╔════╝██╔══██╗██╔═══██╗██╔══██╗██╔══██╗████╗  ██║██║ ██╔╝
+ ███████╗███████║██║█████╗  ██████╔╝██║   ██║██████╔╝███████║██╔██╗ ██║█████╔╝
+ ╚════██║██╔══██║██║██╔══╝  ██╔══██╗██║   ██║██╔═══╝ ██╔══██║██║╚██╗██║██╔═██╗
+ ███████║██║  ██║██║██║     ██║  ██║╚██████╔╝██║     ██║  ██║██║ ╚████║██║  ██╗
+ ╚══════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝</pre>
+    <p class="tagline">// NETRUNNER TERMINAL v0.83 — несанкционированный доступ</p>
+    <label>ПОЗЫВНОЙ:</label>
+    <input id="join-name" maxlength="16" placeholder="введите имя..." autocomplete="off">
+    <button id="join-create" class="btn" title="создать свою комнату — вы будете её хостом">СОЗДАТЬ ИГРУ</button>
+    <div class="join-or">— или —</div>
+    <label>КОД КОМНАТЫ:</label>
+    <input id="join-code" maxlength="4" placeholder="XXXX" autocomplete="off" style="text-transform:uppercase">
+    <button id="join-btn" class="btn">ПОДКЛЮЧИТЬСЯ</button>
+    <button id="rules-btn" class="btn small" title="подробные правила игры">ПРАВИЛА</button>
+    <button id="prefs-btn-join" class="btn small" title="настройки вида: тема, размер интерфейса, дизайн руки, размер карты">🎨 ВИД</button>
+    <p id="join-status" class="dim"></p>
+  </div>
+  <button id="debug-btn" aria-hidden="true"></button>
+  <!-- Окно правил: содержимое — отдельный файл rules.html (можно править и кидать друзьям) -->
+  <div id="rules-modal" class="hidden">
+    <div id="rules-window">
+      <div id="rules-titlebar">
+        <span>▸ ПРАВИЛА // rules.html</span>
+        <button id="rules-close" class="btn small danger" title="закрыть">✕</button>
+      </div>
+      <iframe id="rules-frame" src="rules.html" title="Правила игры"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ЛОББИ ======================= -->
+<section id="screen-lobby" class="screen">
+  <div class="lobby-grid">
+    <div class="panel">
+      <h2 class="acc-amber">▸ НЕТРАННЕРЫ В СЕТИ</h2>
+      <p id="room-code" class="room-code" title="продиктуйте этот код друзьям — по нему они подключатся к вашей игре"></p>
+      <ul id="lobby-players" class="player-list"></ul>
+      <button id="ready-btn" class="btn">ГОТОВ</button>
+      <button id="recreate-btn" class="btn hidden" title="хост: сразу начать новую подготовку для всех — без круга нажатий «ГОТОВ»">⟳ ПЕРЕСОЗДАТЬ ИГРУ</button>
+      <button id="leave-btn" class="btn small danger" title="забыть комнату на этом устройстве и вернуться на экран входа">ВЫЙТИ ИЗ КОМНАТЫ</button>
+      <p class="dim">Матч начнётся, когда все нажмут «ГОТОВ» (минимум 2 игрока). Если связь оборвётся — вернём вас в комнату сами, перезагружать страницу не нужно.</p>
+    </div>
+    <div class="panel">
+      <h2 class="acc-blue">▸ ПАРАМЕТРЫ СЕССИИ <span class="dim">(общее согласие)</span></h2>
+      <div class="settings-form">
+        <label>Стартовое ХП <input id="set-hp" type="number" min="1" max="99"></label>
+        <label>Стартовая мощность <input id="set-power" type="number" min="1" max="20"></label>
+        <label>Программ в руке <input id="set-progs" type="number" min="1" max="21"></label>
+        <label title="0 — таймер отключён, ход длится бесконечно">Таймер хода, сек (0 — выкл) <input id="set-timer" type="number" min="0" max="300"></label>
+        <label>Ширина карты <input id="set-mapw" type="number" min="10" max="40"></label>
+        <label>Высота карты <input id="set-maph" type="number" min="10" max="40"></label>
+        <label>Режим игры
+          <select id="set-mode">
+            <option value="deathmatch">ПОСЛЕДНИЙ ВЫЖИВШИЙ</option>
+            <option value="capture">ЗАХВАТ ТЕРРИТОРИИ</option>
+          </select>
+        </label>
+        <label title="Каждый игрок сам выбирает себе команду в списке слева" style="flex-direction:row;align-items:center;gap:8px">
+          <input id="set-teams" type="checkbox" style="width:auto"> Командный режим
+        </label>
+        <!-- Параметры режима «Захват территории» (видны только в нём) -->
+        <label class="capture-only">Очков для победы <input id="set-cap-points" type="number" min="1" max="20"></label>
+        <label class="capture-only" title="Длина комбинации КодШифра бросается заново каждый раунд">КодШифр: длина от <input id="set-cap-lenmin" type="number" min="1" max="8"></label>
+        <label class="capture-only">до <input id="set-cap-lenmax" type="number" min="1" max="10"></label>
+        <label class="capture-only" title="КодШифр длиннее на N бит за каждые K набранных очков (0 — рост выключен)">Рост КодШифра: +<input id="set-cipher-grow" type="number" min="0" max="10"> бит</label>
+        <label class="capture-only" title="Раз во сколько набранных очков потребление увеличивается">за каждые <input id="set-cipher-step" type="number" min="1" max="10"> очка</label>
+        <!-- Антивирус: механика против затягивания матча -->
+        <label title="На этом раунде просыпается антивирус и мешает ВСЕМ игрокам до конца матча. 0 — выключен">Антивирус: раунд (0 — выкл) <input id="set-av-round" type="number" min="0" max="50"></label>
+        <label title="Как именно антивирус будет мешать игрокам">Тип антивируса
+          <select id="set-av-type">
+            <option value="random">СЛУЧАЙНЫЙ</option>
+            <option value="shuffle">ПЕРЕСБОРКА КАРТЫ</option>
+            <option value="damage">ПЕРЕГРУЗКА СЕТИ</option>
+            <option value="ban">КАРАНТИН ПРОГРАММ</option>
+            <option value="teleport">ПРЫЖКИ УЗЛОВ</option>
+          </select>
+        </label>
+      </div>
+      <p class="dim">Любое изменение сбрасывает готовность всех игроков.</p>
+    </div>
+    <div class="panel chat-panel">
+      <h2>▸ КАНАЛ СВЯЗИ</h2>
+      <div id="chat-log" class="chat-log"></div>
+      <div class="chat-input"><input id="chat-text" maxlength="300" placeholder="сообщение... (хост: /kick имя)" title="Хост может исключить игрока командой /kick позывной"><button id="chat-send" class="btn small">»</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ПОДГОТОВКА (пошагово) ======================= -->
+<section id="screen-setup" class="screen">
+  <div class="setup-layout">
+    <div class="setup-left">
+      <div class="panel">
+        <h2 class="acc-amber">▸ ОЧЕРЕДЬ ХОДОВ</h2>
+        <ul id="setup-order" class="player-list"></ul>
+      </div>
+      <div class="panel grow">
+        <h2 class="acc-blue">▸ СТАТУС</h2>
+        <p id="setup-status" class="dim"></p>
+      </div>
+    </div>
+    <div class="setup-right">
+
+      <!-- ШАГ 1: выбор интерфейса -->
+      <div class="panel grow setup-step" id="step-class">
+        <h2 class="acc-blue">▸ ШАГ 1/3 — ВЫБОР ИНТЕРФЕЙСА</h2>
+        <div id="interface-list"></div>
+        <label class="color-row">ЦВЕТ ПИКСЕЛЯ: <input id="setup-color" type="color"></label>
+        <div class="step-nav">
+          <button id="to-hand-btn" class="btn">ДАЛЕЕ ▸</button>
+        </div>
+      </div>
+
+      <!-- ШАГ 3: сборка руки -->
+      <div class="panel grow setup-step hidden" id="step-hand">
+        <h2 class="acc-amber">▸ ШАГ 3/3 — СБОРКА РУКИ <span id="hand-counter" class="dim"></span></h2>
+        <div id="program-pool" class="program-pool"></div>
+        <h3>▸ ВАША РУКА</h3>
+        <div id="setup-hand" class="setup-hand"></div>
+        <div class="step-nav">
+          <button id="back-class-btn" class="btn small">◂ НАЗАД</button>
+          <button id="debug-all-btn" class="btn small danger hidden">ВСЕ ПРОГРАММЫ (debug)</button>
+          <button id="setup-submit" class="btn">ГОТОВ ▸</button>
+        </div>
+      </div>
+
+      <!-- ОЖИДАНИЕ (не-хост): пока хост настраивает карту или пока остальные собирают руки -->
+      <div class="panel grow setup-step hidden" id="step-wait">
+        <h2>▸ ПОДКЛЮЧЕНИЕ К СЕКТОРУ</h2>
+        <div class="loading-box">
+          <div class="load-bar"><div id="load-fill"></div></div>
+          <pre id="load-log" class="load-log"></pre>
+          <p class="dim">ожидание остальных: карта сектора и сборка рук...</p>
+        </div>
+        <div class="step-nav">
+          <button id="rebuild-btn" class="btn small">◂ ИЗМЕНИТЬ СБОРКУ</button>
+        </div>
+      </div>
+
+      <!-- ШАГ 2 (хост): редактор карты -->
+      <div class="panel grow setup-step hidden" id="step-map">
+        <h2>▸ ШАГ 2/3 — НАСТРОЙКА СЕКТОРА <span class="dim">(вы — хост. ЛКМ — поставить, ПКМ — удалить)</span>
+          <button id="map-tools-open-btn" class="btn small">🛠 ИНСТРУМЕНТЫ</button>
+        </h2>
+        <div id="setup-map" class="map-grid"></div>
+        <div class="step-nav">
+          <button id="map-done-btn" class="btn">КАРТА ГОТОВА ▸</button>
+        </div>
+      </div>
+
+      <!-- Перетаскиваемое окно инструментов карты (хост) -->
+      <div id="map-tools-window" class="hidden">
+        <div id="map-tools-title">
+          <span>▸ ИНСТРУМЕНТЫ КАРТЫ</span>
+          <button id="map-tools-close-btn" title="закрыть">✕</button>
+        </div>
+        <div id="map-tools-body">
+          <div class="mt-block">
+            <div class="mt-label">Объект</div>
+            <div class="map-tools">
+              <select id="tool-select">
+                <option value="wall">Битый пиксель (стена)</option>
+                <option value="zone">Зона с эффектом</option>
+                <option value="mine">Мина</option>
+                <option value="portal">Телепорт (радиус)</option>
+                <option value="portal2">Парный телепорт</option>
+                <option value="point">Точка контроля</option>
+                <option value="rift">Разлом данных</option>
+                <option value="spawn">Пиксель спауна</option>
+                <option value="erase">Ластик</option>
+              </select>
+              <label title="первый клик — угол, второй клик — заливка прямоугольника">
+                <input id="tool-rect" type="checkbox"> прямоугольник
+              </label>
+              <label title="отражать каждую установку объекта по выбранной оси">
+                зеркало:
+                <select id="tool-mirror">
+                  <option value="none">нет</option>
+                  <option value="h">↔ гориз.</option>
+                  <option value="v">↕ верт.</option>
+                  <option value="both">✚ оба</option>
+                </select>
+              </label>
+              <button id="map-undo-btn" class="btn small" title="отменить последнее изменение карты">↩ ОТМЕНА</button>
+            </div>
+            <p id="tool-desc" class="mt-desc"></p>
+            <p class="mt-desc dim">Зажмите ЛКМ и ведите по карте — объекты ставятся/стираются серией (ластик стирает). ПКМ — быстрое удаление.</p>
+          </div>
+          <div class="mt-block">
+            <div class="mt-label">Параметры объекта</div>
+            <div class="obj-config">
+              <input id="obj-name" placeholder="название" maxlength="24">
+              <input id="obj-color" type="color" value="#ff2244" title="цвет объекта">
+              <label title="0 = объект постоянный">раундов: <input id="obj-rounds" type="number" min="0" max="99" value="0"></label>
+              <span id="obj-zone-fields" class="hidden">
+                <label><input id="zone-walkable" type="checkbox" checked> можно стоять</label>
+                <select id="zone-effect">
+                  <option value="none">без эффекта</option>
+                  <option value="heal">лечение</option>
+                  <option value="damage">урон</option>
+                  <option value="power">мощность</option>
+                  <option value="teleport">телепорт</option>
+                </select>
+                <input id="zone-amount" type="number" min="0" max="20" value="5" title="величина эффекта">
+              </span>
+              <span id="obj-mine-fields" class="hidden">
+                урон: <input id="mine-amount" type="number" min="1" max="20" value="5">
+              </span>
+              <span id="obj-portal-fields" class="hidden">
+                <label title="0 = вся карта">радиус: <input id="portal-radius" type="number" min="0" max="99" value="10"></label>
+              </span>
+              <span id="obj-portal2-fields" class="hidden">
+                <label title="порталы с одинаковым номером связаны: вход в один — выход у второго">пара №: <input id="portal2-pair" type="number" min="1" max="99" value="1"></label>
+              </span>
+              <span id="obj-point-fields" class="hidden">
+                <label title="в командном режиме захватывать точку может только её команда; «любая» — нейтральная точка для всех">чья точка:
+                  <select id="point-team">
+                    <option value="">любая</option>
+                    <option value="0">команда А</option>
+                    <option value="1">команда Б</option>
+                    <option value="2">команда В</option>
+                    <option value="3">команда Г</option>
+                  </select>
+                </label>
+              </span>
+            </div>
+            <p id="zone-effect-desc" class="mt-desc"></p>
+          </div>
+          <div class="mt-block">
+            <div class="mt-label">Пресеты <span class="dim">(заменяют всю карту)</span></div>
+            <div class="map-tools">
+              <button class="btn small" data-preset="scatter">ХАОС</button>
+              <button class="btn small" data-preset="arena">АРЕНА</button>
+              <button class="btn small" data-preset="maze">ЛАБИРИНТ</button>
+              <button class="btn small" data-preset="islands">ОСТРОВА</button>
+            </div>
+            <label class="mt-desc">плотность: <input id="preset-density" type="range" min="5" max="40" value="15"> <span id="preset-density-val">15%</span></label>
+            <p class="mt-desc">ХАОС — случайные стены, мины и телепорты. АРЕНА — стены по периметру с четырьмя проходами. ЛАБИРИНТ — колонны со случайными проходами. ОСТРОВА — компактные блоки стен, вокруг мины и зоны лечения/мощности.</p>
+          </div>
+          <div class="mt-block">
+            <div class="mt-label">Шаблоны <span class="dim">(хранятся в вашем браузере)</span></div>
+            <div class="map-tools">
+              <input id="tpl-name" placeholder="имя шаблона" maxlength="20">
+              <button id="tpl-save-btn" class="btn small">СОХРАНИТЬ</button>
+            </div>
+            <div id="tpl-list"></div>
+          </div>
+          <button id="map-border-btn" class="btn small" title="рамка из битых пикселей по краю карты">▣ СТЕНЫ ПО КРАЯМ</button>
+          <button id="map-clear-btn" class="btn small danger">ОЧИСТИТЬ КАРТУ</button>
+        </div>
+      </div>
+
+      <!-- ШАГ 4: расстановка персонажей -->
+      <div class="panel grow setup-step hidden" id="step-deploy">
+        <h2 class="acc-red">▸ РАССТАНОВКА <span class="dim">— кликните по клетке, чтобы поставить персонажа</span></h2>
+        <div id="deploy-map" class="map-grid"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ИГРА ======================= -->
+<section id="screen-game" class="screen">
+  <header id="game-topbar">
+    <div id="turn-banner">ОЖИДАНИЕ...</div>
+    <div id="timer-box">⏱ <span id="timer-value">--</span></div>
+    <button id="timer-pause-btn" class="btn small" title="пауза таймера (если кто-то AFK)">⏸</button>
+    <div id="my-stats"></div>
+    <button id="overheat-btn" class="btn danger hidden">ПЕРЕГРЕВ</button>
+    <button id="endturn-btn" class="btn">ЗАВЕРШИТЬ ХОД</button>
+    <button id="prefs-btn" class="btn small" title="настройки вида: тема, размер интерфейса, дизайн руки, размер карты, затемнение">🎨 ВИД</button>
+    <button id="matrix-help-btn" class="btn small hidden" title="таблица удач и провалов ставки Матрицы">🎰 СТАВКИ</button>
+    <button id="panels-btn" class="btn small mobile-only" title="панели: сеть, канал связи, радио">☰ ПАНЕЛИ</button>
+  </header>
+  <div class="game-layout">
+    <aside id="game-sidebar">
+      <div class="panel">
+        <h2 class="acc-amber">▸ СЕТЬ</h2>
+        <ul id="game-players" class="player-list"></ul>
+      </div>
+      <div class="panel hidden" id="debug-panel">
+        <h2 class="acc-red">▸ DEBUG // ROOT ACCESS</h2>
+        <div class="dbg-row">ХП
+          <button class="btn small" id="dbg-hp-minus">−</button><b id="dbg-hp">?</b><button class="btn small" id="dbg-hp-plus">+</button>
+        </div>
+        <div class="dbg-row">МОЩНОСТЬ
+          <button class="btn small" id="dbg-pw-minus">−</button><b id="dbg-pw">?</b><button class="btn small" id="dbg-pw-plus">+</button>
+        </div>
+        <button id="dbg-reroll" class="btn small">ПЕРЕКИНУТЬ СЛОТЫ</button>
+        <button id="dbg-endturn" class="btn small danger">ЗАВЕРШИТЬ ТЕКУЩИЙ ХОД</button>
+        <p class="dim">клик по своему открытому слоту меняет его бит</p>
+      </div>
+      <div class="panel chat-panel">
+        <h2>▸ КАНАЛ</h2>
+        <div id="chat-log-game" class="chat-log"></div>
+        <div class="chat-input"><input id="chat-text-game" maxlength="300" placeholder="сообщение... (хост: /kick имя)" title="Хост может исключить игрока командой /kick позывной"><button id="chat-send-game" class="btn small">»</button></div>
+      </div>
+      <div class="panel" id="player-panel">
+        <div id="radio-mini">
+          <span id="track-name" class="dim">— тишина в эфире —</span>
+          <button id="radio-open-btn" class="btn small" title="открыть радио">📻 РАДИО</button>
+        </div>
+      </div>
+    </aside>
+    <main id="game-main">
+      <!-- Матричный интерфейс: окно ставки. Видно только игроку с МТРХ в его
+           ход до использования слотов: перетащите сюда ЦЕЛУЮ программу с
+           потреблением от 2 бит. На телефоне: долгий тап по карте -> СТАВКА. -->
+      <div id="matrix-zone" class="hidden">
+        <b>🎰 МАТРИЦА // СТАВКА</b>
+        <span class="dim">перетащите сюда программу (потребление от 2 бит) — слоты перегенерируются; на телефоне: долгий тап по карте ▸ СТАВКА</span>
+      </div>
+      <div id="slots-bar"><div id="slots-strip"></div></div>
+      <div id="hand-bar"></div>
+    </main>
+    <aside id="game-map-panel">
+      <div class="panel grow">
+        <h2 class="acc-red">▸ КАРТА СЕКТОРА</h2>
+        <div id="turn-strip" class="hidden" title="нажмите — полный список игроков"></div>
+        <div id="game-map" class="map-grid"></div>
+        <div id="target-hint" class="dim"></div>
+        <div id="pattern-picker" class="hidden">
+          <span class="dim">узор:</span>
+          <button class="btn tiny pattern-btn" data-pattern="h" title="горизонтальная полоса">─ ─ ─</button>
+          <button class="btn tiny pattern-btn" data-pattern="v" title="вертикальная полоса">│││</button>
+          <button class="btn tiny pattern-btn" data-pattern="d1" title="диагональ вниз">╲</button>
+          <button class="btn tiny pattern-btn" data-pattern="d2" title="диагональ вверх">╱</button>
+          <button class="btn tiny pattern-btn" data-pattern="cornerTL" title="угол: вправо-вниз">┌</button>
+          <button class="btn tiny pattern-btn" data-pattern="cornerTR" title="угол: влево-вниз">┐</button>
+          <button class="btn tiny pattern-btn" data-pattern="cornerBL" title="угол: вправо-вверх">└</button>
+          <button class="btn tiny pattern-btn" data-pattern="cornerBR" title="угол: влево-вверх">┘</button>
+        </div>
+        <!-- Выбор силы «Андервольтинга»: сколько мощности обменять на ХП -->
+        <div id="amount-picker" class="hidden">
+          <span class="dim">обменять мощность:</span>
+          <button class="btn tiny amount-btn" data-amount="1">1</button>
+          <button class="btn tiny amount-btn" data-amount="2">2</button>
+          <button class="btn tiny amount-btn" data-amount="3">3</button>
+          <button class="btn tiny amount-btn" data-amount="4">4</button>
+          <button class="btn tiny amount-btn" data-amount="5">5</button>
+        </div>
+      </div>
+    </aside>
+    <!-- Веер карт руки. В обычном интерфейсе — парит поверх низа экрана
+         (position:fixed, сетку не трогает); в крупном и мобильном — встроен
+         в раскладку отдельной полосой (grid-area: hand), чтобы гарантированно
+         не пересекаться ни с картой сектора, ни со слотами. -->
+    <div id="hand-fan" class="hidden">
+      <div id="fan-cards"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Карта «КодШифр» режима захвата: ЖЁСТКО закреплена в левом нижнем
+     углу экрана (под сайдбаром, левее веера руки) — там всегда пусто,
+     карта не обрезается. Позиция — в style.css (#cipher-card).
+     Появляется только пока игрок стоит на точке контроля. -->
+<div id="cipher-card" class="hidden"></div>
+
+<!-- ======================= ОВЕРЛЕИ ======================= -->
+<div id="overlay-death" class="overlay">
+  <div class="death-box">
+    <div class="death-icon">☠</div>
+    <h1>НЕЙРОИНТЕРФЕЙС НЕ ОТВЕЧАЕТ</h1>
+    <p id="death-phrase"></p>
+    <p class="dim">ваш мозг отключён от сети...</p>
+    <!-- Мёртвый игрок закрывает экран смерти и становится наблюдателем:
+         карта, канал и радио (включая загрузку треков) остаются доступны. -->
+    <button id="death-spectate-btn" class="btn">📡 НАБЛЮДАТЬ ЗА ИГРОЙ</button>
+  </div>
+</div>
+<div id="overlay-win" class="overlay">
+  <div class="death-box win">
+    <h1 id="win-title">СЕТЬ ПОКОРЕНА</h1>
+    <p id="win-phrase"></p>
+    <button id="back-lobby-btn" class="btn">ВЕРНУТЬСЯ В ЛОББИ</button>
+  </div>
+</div>
+<div id="overlay-reboot" class="overlay">
+  <!-- Перезагрузка (0 мощности): бегущий консольный поток на фоне (fx.js)
+       и окно-терминал с последовательностью загрузки — чтобы не путать
+       с экраном смерти (тот красный и статичный). -->
+  <pre id="reboot-bg"></pre>
+  <div id="reboot-term">
+    <div id="reboot-term-head">C:\SHIFROPANK&gt; interface.exe --reboot</div>
+    <pre id="reboot-log"></pre>
+    <div id="reboot-bar-wrap"><div id="reboot-bar"></div></div>
+    <p class="dim">МОЩНОСТЬ ИСЧЕРПАНА — ход пропущен // питание восстановится к началу вашего следующего хода</p>
+  </div>
+</div>
+
+<!-- Змейка: предложение при долгом (>2 мин) ожидании своего хода -->
+<div id="snake-offer" class="hidden">
+  <div class="death-box snake-offer-box">
+    <h2 class="acc-blue">▸ ДОЛГОЕ ОЖИДАНИЕ</h2>
+    <p>Ход думают уже больше двух минут. Сыграть в змейку?</p>
+    <div class="step-nav">
+      <button id="snake-yes" class="btn small">ИГРАТЬ</button>
+      <button id="snake-no" class="btn small danger">НЕ СЕЙЧАС</button>
+    </div>
+  </div>
+</div>
+<!-- Окно змейки: маленькое, перетаскиваемое, не мешает следить за игрой -->
+<div id="snake-window" class="hidden">
+  <div id="snake-title"><span>▸ ЗМЕЙКА // счёт: <b id="snake-score">0</b></span><button id="snake-close" title="закрыть">✕</button></div>
+  <canvas id="snake-canvas" width="240" height="240"></canvas>
+  <div class="snake-hint dim">стрелки / WASD · на телефоне — свайп по полю</div>
+</div>
+<!-- Мобильная: полный список игроков по тапу на полоску «чей ход» -->
+<div id="matrix-help" class="hidden">
+  <div id="matrix-help-box">
+    <div class="err-title"><span>🎰 МАТРИЦА // ТАБЛИЦА СТАВОК</span><span id="matrix-help-close">✕</span></div>
+    <table id="matrix-help-table">
+      <tr><th>ПОТРЕБЛЕНИЕ</th><th>УДАЧА</th><th>ПРОВАЛ</th></tr>
+      <tr><td class="cons">2 бита</td><td>Первое перемещение за ход идёт сквозь стены, мины и объекты (финиш — только на свободной целой клетке)</td><td>Мощность падает в 0: перезагрузка, слоты сгорают, ход заканчивается сразу; к следующему ходу мощность вернётся</td></tr>
+      <tr><td class="cons">3 бита</td><td>Поставленная карта один раз за ход закрывает слоты через закрытые (открытые по обе стороны от закрытых считаются соседними)</td><td>Ваши атаки бьют и вас — половина урона (округление вверх)</td></tr>
+      <tr><td class="cons">4 бита</td><td>Первая атака за ход наносит двойной урон</td><td>Поставленная карта блокируется до конца следующего раунда</td></tr>
+      <tr><td class="cons">5+ бит</td><td class="gold">ДЖЕКПОТ! Половина слотов «идеальные» (◆ — считаются и 0, и 1) + 5 слотов на этот ход</td><td>Передвижения и урон программ −1; срезанные до нуля — заблокированы</td></tr>
+    </table>
+    <div class="dim" style="margin-top:8px">Ставка — раз за свой ход, до розыгрыша любого слота. На кон — только целая своя программа с потреблением от 2 бит; карта остаётся в руке. Окно не закрывается само — закройте крестиком.</div>
+  </div>
+</div>
+
+<div id="players-modal" class="overlay">
+  <div class="death-box players-box">
+    <h2 class="acc-blue">▸ СЕТЬ // ОЧЕРЕДЬ И СТАТУС</h2>
+    <ul id="players-modal-list" class="player-list"></ul>
+    <button id="players-modal-close" class="btn small">ЗАКРЫТЬ</button>
+  </div>
+</div>
+
+<div id="swap-modal" class="overlay">
+  <div class="death-box">
+    <p id="swap-text"></p>
+    <button id="swap-accept" class="btn">ПРИНЯТЬ</button>
+    <button id="swap-decline" class="btn danger">ОТКЛОНИТЬ</button>
+  </div>
+</div>
+
+<!-- Разлом данных: выбор программы и бита для поломки -->
+<div id="rift-modal" class="overlay">
+  <div class="death-box rift-box">
+    <h2 class="acc-red">⌁ РАЗЛОМ ДАННЫХ</h2>
+    <p>В разлом можно поместить одну программу из руки — она станет <b>сломанной</b>:
+       кликните по биту потребления, который нужно убрать.</p>
+    <p class="dim">Сломанная программа наносит вам 2 урона при каждом использовании.
+       Этот разлом сработает для вас только один раз.</p>
+    <div id="rift-list"></div>
+    <button id="rift-close" class="btn small danger">ЗАКРЫТЬ (НЕ ЛОМАТЬ)</button>
+  </div>
+</div>
+
+<!-- Перетаскиваемое окно радио.
+     Перемещение — ТОЛЬКО за заголовок, размер — ТОЛЬКО за уголок справа снизу. -->
+<div id="radio-window" class="hidden">
+  <div id="radio-title">
+    <span>▸ РАДИО «ШИФР»</span>
+    <button id="radio-close-btn" title="закрыть">✕</button>
+  </div>
+  <div id="radio-body">
+    <div id="track-name-win" class="dim">— тишина в эфире —</div>
+    <div class="player-controls">
+      <button id="pl-prev" class="btn small">⏮</button>
+      <button id="pl-play" class="btn small">▶</button>
+      <button id="pl-next" class="btn small">⏭</button>
+      <input id="pl-volume" type="range" min="0" max="100" value="70">
+    </div>
+    <ul id="playlist"></ul>
+    <label class="btn small upload-btn">ЗАГРУЗИТЬ ТРЕК<input id="pl-upload" type="file" accept="audio/*" hidden></label>
+  </div>
+  <div id="radio-resize" title="потяните, чтобы изменить размер"></div>
+</div>
+
+<audio id="music-el"></audio>
+<audio id="news-el"></audio>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/net.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/lobby.js"></script>
+<script src="js/setup.js"></script>
+<script src="js/game.js"></script>
+<script src="js/snake.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
